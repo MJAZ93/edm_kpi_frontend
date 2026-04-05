@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Surfaces */
+  --color-bg:             #f2f0eb;
+  --color-bg-strong:      #e8e4db;
+  --color-surface:        rgba(255, 252, 247, 0.97);
+  --color-surface-strong: #fffdf8;
+  --color-surface-muted:  #f0ece3;
+  --color-border:         rgba(120, 80, 20, 0.12);
+  --color-border-strong:  rgba(120, 80, 20, 0.22);
+
+  /* Text */
+  --color-text:           #1a1f2e;
+  --color-text-soft:      #5a5f6b;
+  --color-text-muted:     #8a8f9a;
+
+  /* Orange — primary action */
+  --color-primary:        #e8670a;
+  --color-primary-deep:   #b84f06;
+  --color-primary-soft:   rgba(232, 103, 10, 0.10);
+  --color-primary-hover:  #d45c08;
+
+  /* Green — sidebar, success */
+  --color-green:          #0f766e;
+  --color-green-deep:     #0a524c;
+  --color-green-soft:     rgba(15, 118, 110, 0.10);
+
+  /* Traffic light */
+  --color-traffic-green:      #16a34a;
+  --color-traffic-yellow:     #ca8a04;
+  --color-traffic-red:        #dc2626;
+  --color-traffic-green-bg:   rgba(22, 163, 74, 0.10);
+  --color-traffic-yellow-bg:  rgba(202, 138, 4, 0.10);
+  --color-traffic-red-bg:     rgba(220, 38, 38, 0.10);
+
+  /* Danger */
+  --color-danger:         #b42318;
+  --color-danger-soft:    rgba(180, 35, 24, 0.10);
+
+  /* Sidebar */
+  --sidebar-bg:           #0d2420;
+  --sidebar-border:       rgba(255, 255, 255, 0.06);
+  --sidebar-text:         rgba(255, 255, 255, 0.70);
+  --sidebar-text-active:  #ffffff;
+  --sidebar-item-active:  rgba(232, 103, 10, 0.18);
+  --sidebar-item-hover:   rgba(255, 255, 255, 0.06);
+  --sidebar-accent:       #e8670a;
+
+  /* Shadows */
+  --shadow-soft:    0 12px 32px rgba(120, 60, 10, 0.08);
+  --shadow-medium:  0 18px 44px rgba(120, 60, 10, 0.13);
+  --shadow-strong:  0 24px 56px rgba(120, 60, 10, 0.18);
+
+  /* Radius */
+  --radius-sm:   12px;
+  --radius-md:   18px;
+  --radius-lg:   24px;
+  --radius-xl:   32px;
+
+  /* Spacing */
+  --space-1: 4px;  --space-2: 8px;   --space-3: 12px;
+  --space-4: 16px; --space-5: 20px;  --space-6: 24px;
+  --space-7: 32px; --space-8: 40px;  --space-9: 48px; --space-10: 64px;
+
+  /* Typography */
+  --font-family: 'Manrope', 'Segoe UI', sans-serif;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: var(--font-family);
+  font-size: 15px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; font-family: inherit; }
+input, select, textarea { font-family: inherit; }
