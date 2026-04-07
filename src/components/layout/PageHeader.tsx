@@ -1,7 +1,7 @@
 import React from 'react'
 
 interface PageHeaderProps {
-  eyebrow?: string
+  eyebrow?: React.ReactNode
   title: string
   subtitle?: string
   actions?: React.ReactNode

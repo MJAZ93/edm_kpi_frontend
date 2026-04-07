@@ -1,13 +1,147 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Toaster } from 'react-hot-toast'
+
+import ProtectedRoute from './router/ProtectedRoute'
+import PermissionRoute from './router/PermissionRoute'
+import AppShell from './components/layout/AppShell'
+
+// Auth
+import LoginPage from './pages/auth/LoginPage'
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
+import ResetPasswordPage from './pages/auth/ResetPasswordPage'
+
+// Dashboard
+import DashboardPage from './pages/dashboard/DashboardPage'
+
+// Projects
+import ProjectsPage from './pages/projects/ProjectsPage'
+import ProjectDetailPage from './pages/projects/ProjectDetailPage'
+
+// Tasks
+import TaskDetailPage from './pages/tasks/TaskDetailPage'
+
+// Analytics
+import DrillDownPage from './pages/analytics/DrillDownPage'
+import MapPage from './pages/analytics/MapPage'
+import TopPerformersPage from './pages/analytics/TopPerformersPage'
+import BenchmarkPage from './pages/analytics/BenchmarkPage'
+
+// Blockers
+import BlockersPage from './pages/blockers/BlockersPage'
+
+// Org
+import OrgPage from './pages/org/OrgPage'
+import OrgEntityPage from './pages/org/OrgEntityPage'
+
+// Geo
+import RegioesPage from './pages/geo/RegioesPage'
+import AscsPage from './pages/geo/AscsPage'
+
+// Users
+import UsersPage from './pages/users/UsersPage'
+
+// Notifications
+import NotificationsPage from './pages/notifications/NotificationsPage'
+
+// Audit
+import AuditPage from './pages/audit/AuditPage'
+
+// Profile
+import ProfilePage from './pages/profile/ProfilePage'
+
+// Design system
 import DesignSystemPage from './pages/design-system/DesignSystemPage'
+
+const qc = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 30_000,
+    },
+  },
+})
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/design-system" element={<DesignSystemPage />} />
-        <Route path="*" element={<Navigate to="/design-system" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <QueryClientProvider client={qc}>
+      <BrowserRouter>
+        <Routes>
+          {/* Public */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          {/* Protected */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppShell />}>
+              <Route path="/dashboard" element={<DashboardPage />} />
+
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/projects/:id" element={<ProjectDetailPage />} />
+
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
+
+              <Route path="/analytics/drill-down" element={<DrillDownPage />} />
+              <Route path="/analytics/map" element={<MapPage />} />
+              <Route path="/analytics/top-performers" element={<TopPerformersPage />} />
+              <Route path="/analytics/benchmark" element={<BenchmarkPage />} />
+
+              <Route path="/blockers" element={<BlockersPage />} />
+
+              <Route path="/org" element={<OrgPage />} />
+
+              {/* Org admin — gated by role */}
+              <Route element={<PermissionRoute action="view:pelouros" />}>
+                <Route path="/org/pelouros" element={<OrgEntityPage type="pelouro" />} />
+              </Route>
+              <Route element={<PermissionRoute action="view:direcoes" />}>
+                <Route path="/org/direcoes" element={<OrgEntityPage type="direcao" />} />
+              </Route>
+              <Route element={<PermissionRoute action="view:departamentos" />}>
+                <Route path="/org/departamentos" element={<OrgEntityPage type="departamento" />} />
+              </Route>
+
+              {/* Geography — CA only */}
+              <Route element={<PermissionRoute action="manage:geo" />}>
+                <Route path="/geo/regioes" element={<RegioesPage />} />
+                <Route path="/geo/ascs" element={<AscsPage />} />
+              </Route>
+
+              {/* User management — CA only */}
+              <Route element={<PermissionRoute action="manage:users" />}>
+                <Route path="/users" element={<UsersPage />} />
+              </Route>
+
+              <Route path="/notifications" element={<NotificationsPage />} />
+
+              {/* Audit — CA, PELOURO, DIRECAO */}
+              <Route element={<PermissionRoute action="view:audit" />}>
+                <Route path="/audit" element={<AuditPage />} />
+              </Route>
+              <Route path="/profile" element={<ProfilePage />} />
+
+              <Route path="/design-system" element={<DesignSystemPage />} />
+
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Route>
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: 'var(--color-surface)',
+            color: 'var(--color-text)',
+            border: '1px solid var(--color-border)',
+            fontSize: 13,
+            fontWeight: 600,
+            boxShadow: 'var(--shadow-elevated)',
+          },
+        }}
+      />
+    </QueryClientProvider>
   )
 }

@@ -24,6 +24,11 @@ const statusBadge: Record<string, 'success' | 'muted' | 'danger' | 'orange'> = {
 }
 const statusLabel: Record<string, string> = { ACTIVE: 'Activo', COMPLETED: 'Concluído', CANCELLED: 'Cancelado' }
 
+function fmtDate(d: string) {
+  const date = new Date(d)
+  return isNaN(date.getTime()) ? d : date.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 export default function ProjectCard({ title, description, ownerLabel, startDate, endDate, totalScore, executionScore, trafficLight, weight, status = 'ACTIVE', onClick }: ProjectCardProps) {
   return (
     <Card variant="default" onClick={onClick} style={{ borderLeft: `3px solid var(--color-primary)` }}>
@@ -47,7 +52,7 @@ export default function ProjectCard({ title, description, ownerLabel, startDate,
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>{ownerLabel}</span>
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Calendar size={11} />{startDate} → {endDate}
+            <Calendar size={11} />{fmtDate(startDate)} → {fmtDate(endDate)}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

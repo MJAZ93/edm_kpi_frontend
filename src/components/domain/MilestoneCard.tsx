@@ -18,6 +18,12 @@ interface MilestoneCardProps {
   onUpdate?: () => void
 }
 
+function fmtDate(d?: string) {
+  if (!d) return '—'
+  const date = new Date(d)
+  return isNaN(date.getTime()) ? d : date.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 const statusMap = {
   PENDING: { variant: 'warning' as const, label: 'Pendente' },
   DONE:    { variant: 'success' as const, label: 'Concluído' },
@@ -52,8 +58,8 @@ export default function MilestoneCard({ title, scopeLabel, plannedValue, achieve
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--color-text-muted)', alignItems: 'center' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Calendar size={10} />{plannedDate}</span>
-          {achievedDate && <span>→ {achievedDate}</span>}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Calendar size={10} />{fmtDate(plannedDate)}</span>
+          {achievedDate && <span>→ {fmtDate(achievedDate)}</span>}
         </div>
         {onUpdate && status !== 'DONE' && (
           <button onClick={onUpdate} style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-primary)', background: 'var(--color-primary-soft)', border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>

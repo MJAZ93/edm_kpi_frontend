@@ -16,7 +16,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   return (
     <div style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '10px 14px', boxShadow: 'var(--shadow-soft)' }}>
       <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)' }}>{d.label}</p>
-      <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{d.count} ({d.percentage.toFixed(1)}%)</p>
+      <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{d.count} ({(d.percentage ?? 0).toFixed(1)}%)</p>
     </div>
   )
 }
@@ -50,7 +50,7 @@ export default function DonutChart({ data, height = 220, centerLabel, centerValu
               <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', flex: 1 }}>{item.label}</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)' }}>{item.count}</span>
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted)', minWidth: 38, textAlign: 'right' }}>{item.percentage.toFixed(1)}%</span>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)', minWidth: 38, textAlign: 'right' }}>{(item.percentage ?? 0).toFixed(1)}%</span>
             </div>
           )
         })}

@@ -8,6 +8,7 @@ interface ProgressBarProps {
   showLabel?: boolean
   label?: string
   variant?: 'orange' | 'green' | 'red' | 'yellow' | 'auto'
+  style?: React.CSSProperties
 }
 
 function getColor(variant: string, value: number) {
@@ -25,11 +26,11 @@ function getColor(variant: string, value: number) {
   return map[variant] || 'var(--color-primary)'
 }
 
-export default function ProgressBar({ value, max = 100, height = 8, color, showLabel = false, label, variant = 'orange' }: ProgressBarProps) {
+export default function ProgressBar({ value, max = 100, height = 8, color, showLabel = false, label, variant = 'orange', style }: ProgressBarProps) {
   const pct = Math.min(100, Math.max(0, (value / max) * 100))
   const fillColor = color || getColor(variant, pct)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, ...style }}>
       {(showLabel || label) && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {label && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-soft)' }}>{label}</span>}
