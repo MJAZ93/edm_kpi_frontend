@@ -7,6 +7,7 @@ import ProgressBar from '../ui/ProgressBar'
 interface IndicadorCardProps {
   title: string
   scopeLabel?: string
+  frequency?: string
   plannedValue: number
   achievedValue?: number
   plannedDate: string
@@ -32,7 +33,16 @@ const statusMap = {
   BLOCKED: { variant: 'danger' as const, label: 'Bloqueado' },
 }
 
-export default function IndicadorCard({ title, scopeLabel, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, assigneeName, onUpdate, onEdit }: IndicadorCardProps) {
+const frequencyMap: Record<string, string> = {
+  DAILY: 'Diária',
+  WEEKLY: 'Semanal',
+  MONTHLY: 'Mensal',
+  QUARTERLY: 'Trimestral',
+  BIANNUAL: 'Semestral',
+  ANNUAL: 'Anual',
+}
+
+export default function IndicadorCard({ title, scopeLabel, frequency, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, assigneeName, onUpdate, onEdit }: IndicadorCardProps) {
   const pct = achievedValue !== undefined ? Math.min(100, (achievedValue / plannedValue) * 100) : 0
   const { variant, label } = statusMap[status]
 
@@ -44,9 +54,9 @@ export default function IndicadorCard({ title, scopeLabel, plannedValue, achieve
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Badge variant={variant} dot>{label}</Badge>
             {scopeLabel && <Badge variant="info"><MapPin size={10} style={{ marginRight: 2 }} />{scopeLabel}</Badge>}
+            {frequency && <Badge variant="default"><Calendar size={10} style={{ marginRight: 2 }} />{frequencyMap[frequency] ?? frequency}</Badge>}
             {hasBlocker && <Badge variant="danger"><AlertOctagon size={10} style={{ marginRight: 2 }} />Impedimento</Badge>}
             {hasPhoto && <Badge variant="muted"><Camera size={10} style={{ marginRight: 2 }} />Foto</Badge>}
-            {assigneeName && <Badge variant="default"><User size={10} style={{ marginRight: 2 }} />{assigneeName}</Badge>}
           </div>
         </div>
       </div>
@@ -62,6 +72,7 @@ export default function IndicadorCard({ title, scopeLabel, plannedValue, achieve
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--color-text-muted)', alignItems: 'center' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Calendar size={10} />{fmtDate(plannedDate)}</span>
+          {frequency && <span style={{ fontWeight: 700 }}>{frequencyMap[frequency] ?? frequency}</span>}
           {achievedDate && <span>→ {fmtDate(achievedDate)}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -78,6 +89,14 @@ export default function IndicadorCard({ title, scopeLabel, plannedValue, achieve
           )}
         </div>
       </div>
+
+      {assigneeName && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <User size={12} style={{ color: 'var(--color-primary)' }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)' }}>{assigneeName}</span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Técnico responsável</span>
+        </div>
+      )}
 
       {notes && <p style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{notes}</p>}
     </Card>

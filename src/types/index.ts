@@ -178,6 +178,7 @@ export interface Milestone {
   scope_type?: ScopeType
   scope_id?: number
   scope_name?: string
+  frequency?: Frequency
   planned_value: number
   achieved_value?: number
   planned_date: string
@@ -481,6 +482,7 @@ export interface CreateMilestonePayload {
   description?: string
   scope_type?: ScopeType
   scope_id?: number
+  frequency?: Frequency
   planned_value: number
   planned_date: string
   notes?: string
@@ -496,6 +498,7 @@ export interface UpdateMilestonePayload {
   description?: string
   scope_type?: ScopeType
   scope_id?: number
+  frequency?: Frequency
   planned_value?: number
   planned_date?: string
   assigned_to?: number

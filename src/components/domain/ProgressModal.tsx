@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import ReactDOM from 'react-dom'
 import { useMutation } from '@tanstack/react-query'
-import { X, Check, Plus, ArrowRight, Image, Trash2 } from 'lucide-react'
+import { X, Check, Plus, ArrowRight, Paperclip, Trash2, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { milestonesService } from '../../services/milestones.service'
 import Spinner from '../ui/Spinner'
@@ -39,8 +39,13 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null
+    if (f && f.size > 5 * 1024 * 1024) {
+      toast.error('Ficheiro demasiado grande. Máximo 5 MB.')
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
     setPhotoFile(f)
-    if (f) {
+    if (f && f.type.startsWith('image/')) {
       const reader = new FileReader()
       reader.onload = ev => setPhotoPreview(ev.target?.result as string)
       reader.readAsDataURL(f)
@@ -59,7 +64,7 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
   const uploadMut = useMutation({
     mutationFn: (file: File) => milestonesService.uploadPhoto(ms.id, file),
     onSuccess: () => { toast.success('Comprovativo anexado.'); onSuccess() },
-    onError:   () => { toast.error('Progresso guardado, mas falhou ao carregar imagem.'); onSuccess() },
+    onError:   () => { toast.error('Progresso guardado, mas falhou ao carregar ficheiro.'); onSuccess() },
   })
 
   // 2. Add progress event
@@ -200,7 +205,7 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
           {/* ── Comprovativo (photo) ──────────────────────────────────────── */}
           <div>
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>
-              Comprovativo <span style={{ fontWeight: 400, color: 'var(--color-text-muted)', textTransform: 'none' }}>(opcional · JPG, PNG, WEBP · máx 5 MB)</span>
+              Comprovativo <span style={{ fontWeight: 400, color: 'var(--color-text-muted)', textTransform: 'none' }}>(opcional · JPG, PNG, WEBP, PDF, TXT, CSV, DOC, DOCX, XLS, XLSX, ZIP · máx 5 MB)</span>
             </label>
 
             {photoPreview ? (
@@ -215,6 +220,21 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
                   </button>
                 </div>
               </div>
+            ) : photoFile ? (
+              <div style={{ borderRadius: 12, border: '1.5px solid var(--color-border)', background: 'var(--color-bg-strong)', padding: '16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--color-surface)', border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <FileText size={18} style={{ color: 'var(--color-primary)' }} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{photoFile.name}</p>
+                    <p style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{(photoFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                  </div>
+                </div>
+                <button onClick={clearPhoto} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: 'var(--color-traffic-red-bg)', border: '1px solid var(--color-traffic-red)', color: 'var(--color-traffic-red)', flexShrink: 0 }}>
+                  <Trash2 size={11} /> Remover
+                </button>
+              </div>
             ) : (
               <div
                 onClick={() => fileRef.current?.click()}
@@ -222,15 +242,15 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-primary)'; (e.currentTarget as HTMLDivElement).style.background = 'color-mix(in srgb, var(--color-primary) 5%, transparent)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--color-border-strong)'; (e.currentTarget as HTMLDivElement).style.background = 'var(--color-bg-strong)' }}
               >
-                <Image size={24} style={{ color: 'var(--color-text-muted)', opacity: 0.5, marginBottom: 8 }} />
-                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-muted)' }}>Clique para seleccionar imagem</p>
-                <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>ou arraste e largue aqui</p>
+                <Paperclip size={24} style={{ color: 'var(--color-text-muted)', opacity: 0.5, marginBottom: 8 }} />
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-muted)' }}>Clique para seleccionar ficheiro</p>
+                <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>imagem ou documento até 5 MB</p>
               </div>
             )}
             <input
               ref={fileRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.zip,image/jpeg,image/png,image/webp,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip"
               onChange={handleFileChange}
               style={{ display: 'none' }}
             />

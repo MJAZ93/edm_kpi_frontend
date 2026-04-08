@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -33,6 +33,15 @@ const BLOCKER_LABEL: Record<string, string> = {
 
 const BLOCKER_COLORS: Record<string, string> = {
   LOGISTIC: '#4a6fa5', FINANCIAL: '#ca8a04', TECHNICAL: '#7c3aed', LEGAL: '#dc2626',
+}
+
+const FREQ_LABEL: Record<string, string> = {
+  DAILY: 'Diária',
+  WEEKLY: 'Semanal',
+  MONTHLY: 'Mensal',
+  QUARTERLY: 'Trimestral',
+  BIANNUAL: 'Semestral',
+  ANNUAL: 'Anual',
 }
 
 // ── Score ring ────────────────────────────────────────────────────────────────
@@ -77,6 +86,7 @@ export default function DepartamentoDashboardPage() {
   const [msTitle, setMsTitle]         = useState('')
   const [msValue, setMsValue]         = useState('')
   const [msDate, setMsDate]           = useState('')
+  const [msFrequency, setMsFrequency] = useState('MONTHLY')
   const [msAssignee, setMsAssignee]   = useState('')
   const [editingMsId, setEditingMsId] = useState<number | null>(null)
   const [editingAssignee, setEditingAssignee] = useState('')
@@ -115,7 +125,7 @@ export default function DepartamentoDashboardPage() {
       refetchMs()
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'departamento-overview'] })
       setShowMsForm(false)
-      setMsTitle(''); setMsValue(''); setMsDate(''); setMsAssignee('')
+      setMsTitle(''); setMsValue(''); setMsDate(''); setMsFrequency(selectedTask?.frequency ?? 'MONTHLY'); setMsAssignee('')
     },
   })
   const updateMs = useMutation({
@@ -147,6 +157,10 @@ export default function DepartamentoDashboardPage() {
     if (activeFilter === 'FROM_DIRECTOR') return t.is_from_director
     return true
   })
+
+  useEffect(() => {
+    setMsFrequency(selectedTask?.frequency ?? 'MONTHLY')
+  }, [selectedTask])
 
   if (isLoading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>
@@ -471,6 +485,15 @@ export default function DepartamentoDashboardPage() {
                       style={{ padding: '7px 10px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
                     />
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      <select
+                        value={msFrequency}
+                        onChange={e => setMsFrequency(e.target.value)}
+                        style={{ padding: '7px 10px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: 12 }}
+                      >
+                        {Object.entries(FREQ_LABEL).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
                       <input
                         type="number"
                         placeholder={selectedTask?.goal_label || 'Valor planeado'}
@@ -478,6 +501,8 @@ export default function DepartamentoDashboardPage() {
                         onChange={e => setMsValue(e.target.value)}
                         style={{ padding: '7px 10px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: 12 }}
                       />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                       <input
                         type="date"
                         value={msDate}
@@ -508,6 +533,7 @@ export default function DepartamentoDashboardPage() {
                         disabled={!msTitle || !msValue || !msDate || !msAssignee || createMs.isPending}
                         onClick={() => createMs.mutate({
                           title: msTitle,
+                          frequency: msFrequency,
                           planned_value: parseFloat(msValue),
                           planned_date: msDate,
                           assigned_to: parseInt(msAssignee),
@@ -523,7 +549,7 @@ export default function DepartamentoDashboardPage() {
                         {createMs.isPending ? 'A guardar…' : 'Guardar'}
                       </button>
                       <button
-                        onClick={() => { setShowMsForm(false); setMsTitle(''); setMsValue(''); setMsDate(''); setMsAssignee('') }}
+                        onClick={() => { setShowMsForm(false); setMsTitle(''); setMsValue(''); setMsDate(''); setMsFrequency(selectedTask?.frequency ?? 'MONTHLY'); setMsAssignee('') }}
                         style={{ padding: '7px 14px', borderRadius: 8, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
                       >
                         Cancelar
@@ -567,6 +593,11 @@ export default function DepartamentoDashboardPage() {
                                 <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
                                   <Clock size={9} /> {new Date(ms.planned_date).toLocaleDateString('pt-MZ', { day: 'numeric', month: 'short' })}
                                 </span>
+                                {ms.frequency && (
+                                  <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 700 }}>
+                                    {FREQ_LABEL[ms.frequency] ?? ms.frequency}
+                                  </span>
+                                )}
                                 <span style={{ fontSize: 10, fontWeight: 700,
                                   color: isDone ? 'var(--color-traffic-green)' : isBlocked ? 'var(--color-traffic-red)' : 'var(--color-text-muted)'
                                 }}>
@@ -624,9 +655,12 @@ export default function DepartamentoDashboardPage() {
                               </div>
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: 11, color: ms.assignee?.name ? 'var(--color-primary)' : 'var(--color-text-muted)', fontWeight: 700 }}>
-                                  👤 {ms.assignee?.name ?? 'Sem responsável'}
-                                </span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  <span style={{ fontSize: 11, color: ms.assignee?.name ? 'var(--color-primary)' : 'var(--color-text-muted)', fontWeight: 700 }}>
+                                    👤 {ms.assignee?.name ?? 'Sem responsável'}
+                                  </span>
+                                  <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Técnico responsável</span>
+                                </div>
                                 <button
                                   onClick={() => { setEditingMsId(ms.id); setEditingAssignee(ms.assigned_to ? String(ms.assigned_to) : '') }}
                                   style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}

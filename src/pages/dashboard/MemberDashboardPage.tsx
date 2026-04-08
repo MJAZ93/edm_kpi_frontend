@@ -57,6 +57,14 @@ const STATUS_BADGE: Record<string, { label: string; variant: 'success' | 'warnin
 }
 
 const SCOPE_LABEL: Record<string, string> = { ASC: 'ASC', REGIONAL: 'Região' }
+const FREQ_LABEL: Record<string, string> = {
+  DAILY: 'Diária',
+  WEEKLY: 'Semanal',
+  MONTHLY: 'Mensal',
+  QUARTERLY: 'Trimestral',
+  BIANNUAL: 'Semestral',
+  ANNUAL: 'Anual',
+}
 
 // ── Month labels ──────────────────────────────────────────────────────────────
 
@@ -297,6 +305,11 @@ export default function MemberDashboardPage() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 6 }}>
                             {ms.planned_date && (
                               <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>📅 {ms.planned_date}</span>
+                            )}
+                            {ms.frequency && (
+                              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                                ⟳ {FREQ_LABEL[ms.frequency] ?? ms.frequency}
+                              </span>
                             )}
                             {ms.scope_name && (
                               <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>

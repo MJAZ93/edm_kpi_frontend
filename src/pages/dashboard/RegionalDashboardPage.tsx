@@ -62,6 +62,14 @@ const MS_STATUS_LABEL: Record<string, string> = {
 const MS_STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
   PENDING: 'warning', DONE: 'success', BLOCKED: 'danger',
 }
+const FREQ_LABEL: Record<string, string> = {
+  DAILY: 'Diária',
+  WEEKLY: 'Semanal',
+  MONTHLY: 'Mensal',
+  QUARTERLY: 'Trimestral',
+  BIANNUAL: 'Semestral',
+  ANNUAL: 'Anual',
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -296,6 +304,11 @@ export default function RegionalDashboardPage() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                         <Badge variant={variant}>{MS_STATUS_LABEL[ms.status] ?? ms.status}</Badge>
+                        {ms.frequency && (
+                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+                            {FREQ_LABEL[ms.frequency] ?? ms.frequency}
+                          </span>
+                        )}
                         <span style={{ fontSize: 10, color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
                           {new Date(ms.planned_date).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short' })}
                         </span>

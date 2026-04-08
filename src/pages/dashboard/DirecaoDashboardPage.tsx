@@ -50,6 +50,14 @@ const CATEGORY_LABELS: Record<string, string> = {
   DIR_ASC:      'Dir. ASC',
   COLABORADOR:  'Colaborador',
 }
+const FREQ_LABEL: Record<string, string> = {
+  DAILY: 'Diária',
+  WEEKLY: 'Semanal',
+  MONTHLY: 'Mensal',
+  QUARTERLY: 'Trimestral',
+  BIANNUAL: 'Semestral',
+  ANNUAL: 'Anual',
+}
 
 // ── Score ring ────────────────────────────────────────────────────────────────
 
@@ -365,6 +373,11 @@ export default function DirecaoDashboardPage() {
                                         <Clock size={9} />
                                         {ms.planned_date ? new Date(ms.planned_date).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
                                       </span>
+                                      {ms.frequency && (
+                                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                                          {FREQ_LABEL[ms.frequency] ?? ms.frequency}
+                                        </span>
+                                      )}
                                       <span style={{
                                         fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 6,
                                         background: isDone ? 'var(--color-traffic-green-bg)' : isBlocked ? 'var(--color-traffic-red-bg)' : 'var(--color-primary-bg)',

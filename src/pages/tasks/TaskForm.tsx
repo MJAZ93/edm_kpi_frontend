@@ -376,7 +376,7 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
           name="frequency"
           control={control}
           render={({ field }) => (
-            <SearchableSelect label="Frequência" options={FREQ_OPTS} value={field.value} onChange={field.onChange} />
+            <SearchableSelect label="Periodicidade de actualização" options={FREQ_OPTS} value={field.value} onChange={field.onChange} />
           )}
         />
         <Controller

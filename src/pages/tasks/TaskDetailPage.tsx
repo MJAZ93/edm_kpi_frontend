@@ -74,6 +74,7 @@ interface IndicadorFormProps {
   msTitle: string; setMsTitle: (v: string) => void
   msScopeType: ScopeType | ''; setMsScopeType: (v: ScopeType | '') => void
   msScopeId: string; setMsScopeId: (v: string) => void
+  msFrequency: string; setMsFrequency: (v: string) => void
   msPlanned: string; setMsPlanned: (v: string) => void
   msDate: string; setMsDate: (v: string) => void
   msNotes: string; setMsNotes: (v: string) => void
@@ -88,7 +89,16 @@ interface IndicadorFormProps {
   taskTotalPlanned?: number  // sum of already-created indicadores
 }
 
-function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msScopeId, setMsScopeId, msPlanned, setMsPlanned, msDate, setMsDate, msNotes, setMsNotes, ascs, regioes, goalLabel, deptUsers, msAssignedTo, setMsAssignedTo, currentUserId, taskStartDate, taskEndDate, taskTargetValue, taskTotalPlanned }: IndicadorFormProps) {
+const FREQ_OPTS = [
+  { value: 'DAILY', label: 'Diária' },
+  { value: 'WEEKLY', label: 'Semanal' },
+  { value: 'MONTHLY', label: 'Mensal' },
+  { value: 'QUARTERLY', label: 'Trimestral' },
+  { value: 'BIANNUAL', label: 'Semestral' },
+  { value: 'ANNUAL', label: 'Anual' },
+]
+
+function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msScopeId, setMsScopeId, msFrequency, setMsFrequency, msPlanned, setMsPlanned, msDate, setMsDate, msNotes, setMsNotes, ascs, regioes, goalLabel, deptUsers, msAssignedTo, setMsAssignedTo, currentUserId, taskStartDate, taskEndDate, taskTargetValue, taskTotalPlanned }: IndicadorFormProps) {
   const scopeEntityOptions = msScopeType === 'ASC'
     ? ascs.map(a => ({ value: String(a.id), label: a.name }))
     : msScopeType === 'REGIAO'
@@ -108,6 +118,12 @@ function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <MsSectionHeader icon={<FileText size={12} style={{ color: 'var(--color-primary)' }} />} label="Identificação" />
         <Input label="Título" placeholder="Ex: Semana 1 — Inspecções Pemba" value={msTitle} onChange={e => setMsTitle(e.target.value)} />
+        <SearchableSelect
+          label="Periodicidade de actualização"
+          options={FREQ_OPTS}
+          value={msFrequency}
+          onChange={setMsFrequency}
+        />
       </div>
 
       {/* ── Âmbito geográfico */}
@@ -271,6 +287,7 @@ export default function TaskDetailPage() {
   const [msTitle, setMsTitle] = useState('')
   const [msScopeType, setMsScopeType] = useState<ScopeType | ''>('')
   const [msScopeId, setMsScopeId] = useState('')
+  const [msFrequency, setMsFrequency] = useState('MONTHLY')
   const [msPlanned, setMsPlanned] = useState('')
   const [msDate, setMsDate] = useState('')
   const [msNotes, setMsNotes] = useState('')
@@ -390,6 +407,7 @@ export default function TaskDetailPage() {
     setMsTitle('')
     setMsScopeType('')
     setMsScopeId('')
+    setMsFrequency(task?.frequency ?? 'MONTHLY')
     setMsPlanned('')
     setMsDate('')
     setMsNotes('')
@@ -405,6 +423,7 @@ export default function TaskDetailPage() {
     setMsTitle(ms.title ?? '')
     setMsScopeType(ms.scope_type === 'REGIONAL' ? 'REGIAO' : (ms.scope_type ?? ''))
     setMsScopeId(ms.scope_id ? String(ms.scope_id) : '')
+    setMsFrequency(ms.frequency ?? task?.frequency ?? 'MONTHLY')
     setMsPlanned(String(ms.planned_value ?? ''))
     setMsDate(ms.planned_date ? String(ms.planned_date).slice(0, 10) : '')
     setMsNotes(ms.notes ?? '')
@@ -438,6 +457,7 @@ export default function TaskDetailPage() {
     createMs.mutate({
       title: msTitle, scope_type: msScopeType || undefined,
       scope_id: msScopeId ? Number(msScopeId) : undefined,
+      frequency: msFrequency as any,
       planned_value: Number(msPlanned), planned_date: msDate, notes: msNotes,
       assigned_to: msAssignedTo ? Number(msAssignedTo) : undefined,
     })
@@ -452,6 +472,7 @@ export default function TaskDetailPage() {
         title: msTitle,
         scope_type: msScopeType || undefined,
         scope_id: msScopeId ? Number(msScopeId) : undefined,
+        frequency: msFrequency as any,
         planned_value: Number(msPlanned),
         planned_date: msDate,
         notes: msNotes,
@@ -563,6 +584,7 @@ export default function TaskDetailPage() {
                     key={m.id}
                     title={m.title}
                     scopeLabel={scopeLabelFor(m)}
+                    frequency={m.frequency}
                     plannedValue={m.planned_value}
                     achievedValue={m.achieved_value}
                     plannedDate={m.planned_date}
@@ -715,6 +737,7 @@ export default function TaskDetailPage() {
           msTitle={msTitle} setMsTitle={setMsTitle}
           msScopeType={msScopeType} setMsScopeType={v => { setMsScopeType(v); setMsScopeId('') }}
           msScopeId={msScopeId} setMsScopeId={setMsScopeId}
+          msFrequency={msFrequency} setMsFrequency={setMsFrequency}
           msPlanned={msPlanned} setMsPlanned={setMsPlanned}
           msDate={msDate} setMsDate={setMsDate}
           msNotes={msNotes} setMsNotes={setMsNotes}
@@ -750,6 +773,7 @@ export default function TaskDetailPage() {
           msTitle={msTitle} setMsTitle={setMsTitle}
           msScopeType={msScopeType} setMsScopeType={v => { setMsScopeType(v); setMsScopeId('') }}
           msScopeId={msScopeId} setMsScopeId={setMsScopeId}
+          msFrequency={msFrequency} setMsFrequency={setMsFrequency}
           msPlanned={msPlanned} setMsPlanned={setMsPlanned}
           msDate={msDate} setMsDate={setMsDate}
           msNotes={msNotes} setMsNotes={setMsNotes}
