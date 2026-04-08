@@ -96,11 +96,11 @@ export default function DepartamentoDashboardPage() {
   })
 
   const { data: msData, refetch: refetchMs } = useQuery({
-    queryKey: ['milestones', selectedTask?.id],
+    queryKey: ['indicadores', selectedTask?.id],
     queryFn: () => milestonesService.list(selectedTask!.id),
     enabled: !!selectedTask,
   })
-  const milestones = msData?.data ?? []
+  const indicadores = msData?.data ?? []
 
   const { data: empData } = useQuery({
     queryKey: ['dashboard', 'employee-ranking'],
@@ -225,7 +225,7 @@ export default function DepartamentoDashboardPage() {
       {/* ── Stat cards ───────────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         <StatCard
-          label="Total Tarefas"
+          label="Total Acções"
           value={stats.total ?? 0}
           icon={<ListTodo size={17} />}
         />
@@ -259,7 +259,7 @@ export default function DepartamentoDashboardPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <ListTodo size={15} style={{ color: 'var(--color-primary)' }} />
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Tarefas do Departamento
+                  Acções do Departamento
                 </p>
                 <Badge variant="default" style={{ marginLeft: 4 }}>{filteredTasks.length}</Badge>
               </div>
@@ -267,7 +267,7 @@ export default function DepartamentoDashboardPage() {
                 onClick={() => navigate('/projects')}
                 style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
               >
-                Ver projectos <ChevronRight size={13} />
+                Ver pilares estratégicos <ChevronRight size={13} />
               </button>
             </div>
 
@@ -301,7 +301,7 @@ export default function DepartamentoDashboardPage() {
             {filteredTasks.length === 0 ? (
               <div style={{ padding: '32px 0', textAlign: 'center' }}>
                 <TrendingUp size={28} style={{ color: 'var(--color-primary)', opacity: 0.3, marginBottom: 8 }} />
-                <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Nenhuma tarefa encontrada</p>
+                <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Nenhuma acção encontrada</p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -419,13 +419,13 @@ export default function DepartamentoDashboardPage() {
             )}
           </Card>
 
-          {/* Right sidebar: milestones panel or blockers */}
+          {/* Right sidebar: indicadores panel or blockers */}
           {selectedTask ? (
             <Card variant="elevated" style={{ position: 'sticky', top: 20 }}>
               {/* Header */}
               <div style={{ marginBottom: 16 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                  {selectedTask.project_title || 'Tarefa'}
+                  {selectedTask.project_title || 'Acção'}
                 </p>
                 <p style={{ fontSize: 14, fontWeight: 800, color: 'var(--color-text)', lineHeight: 1.3, marginBottom: 12 }}>
                   {selectedTask.title}
@@ -442,11 +442,11 @@ export default function DepartamentoDashboardPage() {
                 </div>
               </div>
 
-              {/* Milestones section */}
+              {/* Indicadores section */}
               <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    Marcos ({milestones.length})
+                    Marcos ({indicadores.length})
                   </p>
                   <button
                     onClick={() => setShowMsForm(v => !v)}
@@ -461,7 +461,7 @@ export default function DepartamentoDashboardPage() {
                   </button>
                 </div>
 
-                {/* New milestone form */}
+                {/* New indicador form */}
                 {showMsForm && (
                   <div style={{ background: 'var(--color-bg-strong)', borderRadius: 10, padding: 12, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <input
@@ -532,18 +532,29 @@ export default function DepartamentoDashboardPage() {
                   </div>
                 )}
 
-                {/* Milestone list */}
-                {milestones.length === 0 && !showMsForm ? (
+                {/* Indicador list */}
+                {indicadores.length === 0 && !showMsForm ? (
                   <p style={{ fontSize: 12, color: 'var(--color-text-muted)', textAlign: 'center', padding: '16px 0' }}>Sem marcos definidos</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {milestones.map((ms: any) => {
+                    {indicadores.map((ms: any) => {
                       const isDone    = ms.status === 'DONE'
                       const isBlocked = ms.status === 'BLOCKED'
                       const iconColor = isDone ? 'var(--color-traffic-green)' : isBlocked ? 'var(--color-traffic-red)' : 'var(--color-text-muted)'
                       const isEditing = editingMsId === ms.id
+
+                      const planned  = ms.planned_value  ?? 0
+                      const achieved = ms.achieved_value ?? 0
+                      const pct      = planned > 0 ? Math.min(100, Math.max(0, (achieved / planned) * 100)) : 0
+                      const barColor = isDone
+                        ? 'var(--color-traffic-green)'
+                        : isBlocked
+                          ? 'var(--color-traffic-red)'
+                          : 'var(--color-primary)'
+
                       return (
                         <div key={ms.id} style={{ padding: '8px 10px', background: 'var(--color-bg-strong)', borderRadius: 8 }}>
+                          {/* Title + date + status */}
                           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                             <div style={{ marginTop: 1, flexShrink: 0, color: iconColor }}>
                               {isDone ? <CheckCircle2 size={14} /> : <Circle size={14} />}
@@ -562,6 +573,22 @@ export default function DepartamentoDashboardPage() {
                                   {ms.status}
                                 </span>
                               </div>
+                            </div>
+                          </div>
+
+                          {/* Progress: achieved vs planned */}
+                          <div style={{ margin: '8px 0 0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                              <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>Realizado</span>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: isDone ? 'var(--color-traffic-green)' : 'var(--color-text)' }}>
+                                {achieved.toLocaleString('pt-MZ')}
+                                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                                  {' '}/ {planned.toLocaleString('pt-MZ')}
+                                </span>
+                              </span>
+                            </div>
+                            <div style={{ height: 5, borderRadius: 999, background: 'var(--color-border)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: barColor, transition: 'width 500ms' }} />
                             </div>
                           </div>
 
@@ -840,7 +867,14 @@ export default function DepartamentoDashboardPage() {
               properties: f.properties,
             }))}
             height={400}
-            onSelect={() => navigate('/analytics/map')}
+            renderPopupContent={(_props, _close) => (
+              <button
+                onClick={() => navigate('/analytics/map')}
+                style={{ width: '100%', marginTop: 4, padding: '7px 0', borderRadius: 8, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+              >
+                Ver no mapa completo →
+              </button>
+            )}
           />
         ) : (
           <div style={{

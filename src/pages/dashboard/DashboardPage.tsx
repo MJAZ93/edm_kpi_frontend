@@ -159,13 +159,13 @@ export default function DashboardPage() {
         title={`Bom dia, ${user?.name?.split(' ')[0] ?? 'utilizador'}`}
         subtitle="Acompanhamento de performance e KPIs da empresa"
         badges={<Badge variant="orange">{user?.role}</Badge>}
-        actions={<Button variant="primary" icon={<FolderKanban size={15} />} onClick={() => navigate('/projects')}>Ver Projectos</Button>}
+        actions={<Button variant="primary" icon={<FolderKanban size={15} />} onClick={() => navigate('/projects')}>Ver Pilares Estratégicos</Button>}
       />
 
       {/* KPI Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-        <StatCard label="Total Projectos"    value={summary?.total_projects ?? 0}     icon={<FolderKanban size={17} />} />
-        <StatCard label="Milestones Feitos"  value={summary?.milestones_done ?? 0}    icon={<CheckCircle2 size={17} />}  color="var(--color-green-soft)" />
+        <StatCard label="Total Pilares Estratégicos"    value={summary?.total_projects ?? 0}     icon={<FolderKanban size={17} />} />
+        <StatCard label="Indicadores Feitos"  value={summary?.milestones_done ?? 0}    icon={<CheckCircle2 size={17} />}  color="var(--color-green-soft)" />
         <StatCard label="Score Empresa"      value={perf ? `${perf.total_score.toFixed(1)}` : '—'} icon={<BarChart3 size={17} />} color="var(--color-traffic-yellow-bg)" />
         <StatCard label="Impedimentos"       value={summary?.milestones_blocked ?? 0} icon={<ShieldAlert size={17} />}   color="var(--color-traffic-red-bg)" />
       </div>
@@ -222,7 +222,7 @@ export default function DashboardPage() {
           <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text)', marginBottom: 4 }}>Distribuição</p>
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 20 }}>Por semáforo de performance</p>
           {donutData.length > 0
-            ? <DonutChart data={donutData} height={180} centerValue={String(summary?.total_tasks ?? '')} centerLabel="Tarefas" />
+            ? <DonutChart data={donutData} height={180} centerValue={String(summary?.total_tasks ?? '')} centerLabel="Acções" />
             : <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: 13 }}>Sem dados</div>
           }
         </Card>
@@ -250,11 +250,11 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Pending milestones summary */}
+      {/* Pending indicadores summary */}
       <Card style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text)', marginBottom: 4 }}>Milestones Pendentes</p>
+            <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text)', marginBottom: 4 }}>Indicadores Pendentes</p>
             <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
               {summary?.milestones_pending ?? 0} pendentes · {summary?.milestones_blocked ?? 0} bloqueados
             </p>
@@ -266,13 +266,13 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* ── Projectos Activos ─────────────────────────────────────────────────── */}
+      {/* ── Pilares Estratégicos Activos ─────────────────────────────────────────────────── */}
       <div>
         {/* Section header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
-            <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-text)', marginBottom: 2 }}>Projectos Activos</p>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{allProjects.length} projecto{allProjects.length !== 1 ? 's' : ''} activo{allProjects.length !== 1 ? 's' : ''}</p>
+            <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-text)', marginBottom: 2 }}>Pilares Estratégicos Activos</p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{allProjects.length} pilar estratégico{allProjects.length !== 1 ? 's' : ''} activo{allProjects.length !== 1 ? 's' : ''}</p>
           </div>
           <Button
             variant="ghost"
@@ -280,7 +280,7 @@ export default function DashboardPage() {
             icon={<ArrowRight size={13} />}
             onClick={() => navigate('/projects')}
           >
-            Ver todos os projectos
+            Ver todos os pilares estratégicos
           </Button>
         </div>
 
@@ -315,7 +315,7 @@ export default function DashboardPage() {
             <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', pointerEvents: 'none' }} />
             <input
               type="text"
-              placeholder="Pesquisar projecto..."
+              placeholder="Pesquisar pilar estratégico..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{
@@ -343,7 +343,7 @@ export default function DashboardPage() {
           </div>
         ) : filteredProjects.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-text-muted)', fontSize: 13 }}>
-            Nenhum projecto encontrado.
+            Nenhum pilar estratégico encontrado.
           </div>
         ) : (
           <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
@@ -428,7 +428,7 @@ export default function DashboardPage() {
                     {project.parent && (
                       <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--color-border)' }}>
                         <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-                          Sub-projecto de: {project.parent.title}
+                          Sub-pilar de: {project.parent.title}
                         </span>
                       </div>
                     )}
@@ -456,7 +456,7 @@ export default function DashboardPage() {
                 gap: 6,
               }}
             >
-              Ver todos os projectos <ArrowRight size={13} />
+              Ver todos os pilares estratégicos <ArrowRight size={13} />
             </button>
           </div>
         )}

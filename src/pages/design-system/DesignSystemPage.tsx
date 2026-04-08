@@ -277,7 +277,7 @@ export default function DesignSystemPage() {
             <Card>
               <Label>Com ícones</Label>
               <Row>
-                <Button variant="primary" icon={<Plus size={15} />}>Novo Projecto</Button>
+                <Button variant="primary" icon={<Plus size={15} />}>Novo Pilar Estratégico</Button>
                 <Button variant="secondary" icon={<Search size={14} />}>Pesquisar</Button>
                 <Button variant="danger" icon={<Trash2 size={14} />}>Eliminar</Button>
                 <Button variant="ghost" icon={<Eye size={14} />}>Ver detalhes</Button>
@@ -291,7 +291,7 @@ export default function DesignSystemPage() {
               <Card>
                 <Label>Inputs</Label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <Input label="Nome do Projecto" placeholder="Ex: Redução de Perdas 2026" value={inputVal} onChange={e => setInputVal(e.target.value)} />
+                  <Input label="Nome do Pilar Estratégico" placeholder="Ex: Redução de Perdas 2026" value={inputVal} onChange={e => setInputVal(e.target.value)} />
                   <Input label="Email" placeholder="utilizador@edm.co.mz" type="email" />
                   <Input label="Campo com erro" placeholder="Preencha este campo" error="Este campo é obrigatório" />
                   <Input label="Com hint" placeholder="Ex: 50000" hint="Número inteiro positivo" icon={<Search size={14} />} />
@@ -308,7 +308,7 @@ export default function DesignSystemPage() {
                     ]} />
                   <Textarea label="Notas" placeholder="Descreva o impedimento ou contexto…" rows={4} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <Checkbox checked={checked1} onChange={setChecked1} label="Incluir milestones bloqueados" />
+                    <Checkbox checked={checked1} onChange={setChecked1} label="Incluir indicadores bloqueados" />
                     <Checkbox checked={checked2} onChange={setChecked2} label="Notificar responsável acima" />
                     <Checkbox checked={false} onChange={() => {}} label="Opção desactivada" disabled />
                   </div>
@@ -414,8 +414,8 @@ export default function DesignSystemPage() {
           {/* ── STAT CARDS ─────────────────────────────────── */}
           <Section id="stat-cards" title="StatCards">
             <Grid cols={4} gap={16}>
-              <StatCard label="Total Projectos" value="12" delta={8} deltaLabel="vs mês anterior" icon={<FolderKanban size={18} />} />
-              <StatCard label="Milestones Feitos" value="120" delta={15} deltaLabel="vs mês anterior" icon={<CheckCircle2 size={18} />} color="var(--color-green-soft)" />
+              <StatCard label="Total Pilares Estratégicos" value="12" delta={8} deltaLabel="vs mês anterior" icon={<FolderKanban size={18} />} />
+              <StatCard label="Indicadores Feitos" value="120" delta={15} deltaLabel="vs mês anterior" icon={<CheckCircle2 size={18} />} color="var(--color-green-soft)" />
               <StatCard label="Score Empresa" value="70.7" delta={-3} deltaLabel="vs mês anterior" icon={<BarChart3 size={18} />} color="var(--color-traffic-yellow-bg)" />
               <StatCard label="Impedimentos" value="4" delta={-2} deltaLabel="resolvidos" icon={<ShieldAlert size={18} />} color="var(--color-traffic-red-bg)" />
             </Grid>
@@ -478,9 +478,9 @@ export default function DesignSystemPage() {
           {/* ── DOMAIN CARDS ───────────────────────────────── */}
           <Section id="domain" title="Componentes de Domínio">
             <Tabs tabs={[
-              { key: 'projects', label: 'Projectos' },
-              { key: 'tasks', label: 'Tarefas' },
-              { key: 'milestones', label: 'Milestones' },
+              { key: 'projects', label: 'Pilares Estratégicos' },
+              { key: 'tasks', label: 'Acções' },
+              { key: 'indicadores', label: 'Indicadores' },
               { key: 'blockers', label: 'Impedimentos' },
               { key: 'leaderboard', label: 'Leaderboard' },
             ]}>
@@ -489,18 +489,18 @@ export default function DesignSystemPage() {
                   <Grid cols={2} gap={20}>
                     <ProjectCard title="Redução de Perdas Técnicas" description="Reduzir perdas de energia em toda a rede nacional." ownerLabel="Pelouro Técnico" startDate="Jan 2026" endDate="Dez 2026" totalScore={72.8} executionScore={78} trafficLight="YELLOW" weight={100} status="ACTIVE" onClick={() => {}} />
                     <ProjectCard title="Modernização da Rede" description="Substituição de equipamentos obsoletos nas ASCs prioritárias." ownerLabel="Pelouro Infraestrutura" startDate="Mar 2026" endDate="Dez 2026" totalScore={92.1} executionScore={94} trafficLight="GREEN" weight={60} status="ACTIVE" onClick={() => {}} />
-                    <ProjectCard title="Projecto Piloto Sul" description="Teste de novos medidores na região sul." ownerLabel="Direcção Sul" startDate="Jan 2026" endDate="Jun 2026" totalScore={48.3} executionScore={42} trafficLight="RED" weight={30} status="ACTIVE" onClick={() => {}} />
+                    <ProjectCard title="Pilar Estratégico Piloto Sul" description="Teste de novos medidores na região sul." ownerLabel="Direcção Sul" startDate="Jan 2026" endDate="Jun 2026" totalScore={48.3} executionScore={42} trafficLight="RED" weight={30} status="ACTIVE" onClick={() => {}} />
                     <ProjectCard title="Formação de Técnicos" description="" ownerLabel="RH" startDate="Fev 2026" endDate="Abr 2026" totalScore={100} executionScore={100} trafficLight="GREEN" status="COMPLETED" onClick={() => {}} />
                   </Grid>
                 )
                 if (active === 'tasks') return (
                   <Grid cols={2} gap={20}>
-                    <TaskCard title="Efectuar 50.000 inspecções" frequency="MONTHLY" goalLabel="Inspecções realizadas" startValue={0} currentValue={18000} targetValue={50000} milestonesTotal={12} milesDone={7} trafficLight="YELLOW" ownerLabel="Direcção Técnica" onClick={() => {}} />
-                    <TaskCard title="Efectuar 18.000 trocas de contadores" frequency="WEEKLY" goalLabel="Contadores trocados" startValue={0} currentValue={15800} targetValue={18000} milestonesTotal={8} milesDone={8} trafficLight="GREEN" ownerLabel="Departamento Contadores" onClick={() => {}} />
-                    <TaskCard title="Reduzir perdas técnicas em 5%" frequency="QUARTERLY" goalLabel="% perdas técnicas" startValue={78} currentValue={74} targetValue={73} milestonesTotal={4} milesDone={1} trafficLight="RED" ownerLabel="Direcção Norte" onClick={() => {}} />
+                    <TaskCard title="Efectuar 50.000 inspecções" frequency="MONTHLY" goalLabel="Inspecções realizadas" startValue={0} currentValue={18000} targetValue={50000} indicadoresTotal={12} milesDone={7} trafficLight="YELLOW" ownerLabel="Direcção Técnica" onClick={() => {}} />
+                    <TaskCard title="Efectuar 18.000 trocas de contadores" frequency="WEEKLY" goalLabel="Contadores trocados" startValue={0} currentValue={15800} targetValue={18000} indicadoresTotal={8} milesDone={8} trafficLight="GREEN" ownerLabel="Departamento Contadores" onClick={() => {}} />
+                    <TaskCard title="Reduzir perdas técnicas em 5%" frequency="QUARTERLY" goalLabel="% perdas técnicas" startValue={78} currentValue={74} targetValue={73} indicadoresTotal={4} milesDone={1} trafficLight="RED" ownerLabel="Direcção Norte" onClick={() => {}} />
                   </Grid>
                 )
-                if (active === 'milestones') return (
+                if (active === 'indicadores') return (
                   <Grid cols={2} gap={16}>
                     <MilestoneCard title="Semana 1 — Inspecções Pemba" scopeLabel="ASC Pemba" plannedValue={300} achievedValue={287} plannedDate="07 Jan" achievedDate="08 Jan" status="DONE" hasPhoto notes="Condições climatéricas adversas reduziram produção 4%." />
                     <MilestoneCard title="Semana 2 — Inspecções Nacala" scopeLabel="ASC Nacala" plannedValue={400} achievedValue={320} plannedDate="14 Jan" status="PENDING" onUpdate={() => {}} />
@@ -547,8 +547,8 @@ export default function DesignSystemPage() {
               <Grid cols={2} gap={20}>
                 <Card variant="elevated">
                   <p style={{ fontSize: 15, fontWeight: 800, marginBottom: 4, color: 'var(--color-text)' }}>Distribuição por Semáforo</p>
-                  <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 20 }}>48 tarefas activas</p>
-                  <DonutChart data={DONUT_DATA} height={200} centerValue="48" centerLabel="Tarefas" />
+                  <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 20 }}>48 acções activas</p>
+                  <DonutChart data={DONUT_DATA} height={200} centerValue="48" centerLabel="Acções" />
                 </Card>
                 <Card variant="elevated">
                   <p style={{ fontSize: 15, fontWeight: 800, marginBottom: 4, color: 'var(--color-text)' }}>Ranking ASC</p>
@@ -594,24 +594,24 @@ export default function DesignSystemPage() {
             }>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <p style={{ fontSize: 14, color: 'var(--color-text)' }}>
-                  Tem a certeza que pretende eliminar o projecto <b>Redução de Perdas 2026</b>?
+                  Tem a certeza que pretende eliminar o pilar estratégico <b>Redução de Perdas 2026</b>?
                 </p>
-                <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Esta acção não pode ser revertida. Todas as tarefas e milestones associados serão arquivados.</p>
+                <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Esta acção não pode ser revertida. Todas as acções e indicadores associados serão arquivados.</p>
                 <div style={{ padding: '12px 16px', background: 'var(--color-traffic-red-bg)', borderRadius: 10, border: '1px solid rgba(220,38,38,0.15)' }}>
-                  <p style={{ fontSize: 13, color: 'var(--color-traffic-red)', fontWeight: 600 }}>12 tarefas e 48 milestones serão afectados.</p>
+                  <p style={{ fontSize: 13, color: 'var(--color-traffic-red)', fontWeight: 600 }}>12 acções e 48 indicadores serão afectados.</p>
                 </div>
               </div>
             </Modal>
 
-            <Modal open={formModalOpen} onClose={() => setFormModalOpen(false)} title="Novo Projecto" width={560} footer={
+            <Modal open={formModalOpen} onClose={() => setFormModalOpen(false)} title="Novo Pilar Estratégico" width={560} footer={
               <>
                 <Button variant="secondary" onClick={() => setFormModalOpen(false)}>Cancelar</Button>
-                <Button variant="primary" icon={<Plus size={14} />} onClick={() => setFormModalOpen(false)}>Criar Projecto</Button>
+                <Button variant="primary" icon={<Plus size={14} />} onClick={() => setFormModalOpen(false)}>Criar Pilar Estratégico</Button>
               </>
             }>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <Input label="Título do Projecto" placeholder="Ex: Redução de Perdas 2026" />
-                <Textarea label="Descrição" placeholder="Descreva o objectivo principal deste projecto…" rows={3} />
+                <Input label="Título do Pilar Estratégico" placeholder="Ex: Redução de Perdas 2026" />
+                <Textarea label="Descrição" placeholder="Descreva o objectivo principal deste pilar estratégico…" rows={3} />
                 <Grid cols={2} gap={12}>
                   <Select label="Nível" options={[{value:'CA',label:'CA'},{value:'PELOURO',label:'Pelouro'},{value:'DIRECAO',label:'Direcção'}]} />
                   <Input label="Peso (%)" type="number" placeholder="100" />
@@ -630,7 +630,7 @@ export default function DesignSystemPage() {
             <Card>
               <Tabs tabs={[
                 { key: 'overview', label: 'Visão Geral', icon: <FolderKanban size={14} /> },
-                { key: 'tasks', label: 'Tarefas', icon: <CheckCircle2 size={14} /> },
+                { key: 'tasks', label: 'Acções', icon: <CheckCircle2 size={14} /> },
                 { key: 'analytics', label: 'Analytics', icon: <BarChart3 size={14} /> },
                 { key: 'notifications', label: 'Notificações', icon: <Bell size={14} /> },
               ]}>

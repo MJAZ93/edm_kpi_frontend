@@ -37,8 +37,9 @@ export function useAuth() {
       'create:direcao':      [...ADMIN_ROLES, 'PELOURO'],
       'create:departamento': [...ADMIN_ROLES, 'PELOURO', 'DIRECAO'],
       'create:project':      [...ADMIN_ROLES, 'PELOURO', 'DIRECAO', 'DEPARTAMENTO'],
+      'update:project':      [...ADMIN_ROLES, 'PELOURO', 'DIRECAO', 'DEPARTAMENTO'],
       'create:task':         [...ADMIN_ROLES, 'PELOURO', 'DIRECAO', 'DEPARTAMENTO'],
-      'update:milestone':    ['DIRECAO', 'DEPARTAMENTO'],
+      'update:milestone':    [...ADMIN_ROLES, 'DIRECAO', 'DEPARTAMENTO'],
       'approve:blocker':     [...ADMIN_ROLES, 'PELOURO', 'DIRECAO'],
       'view:all_dashboard':  [...ADMIN_ROLES],
       // Admin pages (ADMIN only — CA/PELOURO get the executive dashboard)

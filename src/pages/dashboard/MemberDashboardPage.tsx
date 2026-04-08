@@ -79,7 +79,7 @@ export default function MemberDashboardPage() {
   // Derive ascIds from data (safe when undefined — empty array)
   const ascIds: number[] = data?.asc_ids ?? []
 
-  // Map — only fetch when we have ASC IDs from the member's milestones
+  // Map — only fetch when we have ASC IDs from the member's indicadores
   // Must be declared BEFORE any conditional returns (Rules of Hooks)
   const { data: mapData } = useQuery({
     queryKey: ['dashboard', 'map', 'ASC', 'member', ascIds],
@@ -94,14 +94,14 @@ export default function MemberDashboardPage() {
 
   const score        = data?.score        ?? { total_score: 0, execution_score: 0, goal_score: 0, traffic_light: 'RED', ms_total: 0, ms_done: 0 }
   const stats        = data?.stats        ?? { total: 0, done: 0, pending: 0, blocked: 0 }
-  const milestones: any[] = data?.milestones   ?? []
+  const indicadores: any[] = data?.indicadores   ?? []
   const monthly: any[]    = data?.monthly      ?? []
   const projects: any[]   = data?.projects     ?? []
   const departments: any[] = data?.departments ?? []
 
-  // Group milestones by task
+  // Group indicadores by task
   const taskGroups = Object.values(
-    milestones.reduce((acc: Record<number, any>, ms: any) => {
+    indicadores.reduce((acc: Record<number, any>, ms: any) => {
       if (!acc[ms.task_id]) acc[ms.task_id] = { taskId: ms.task_id, taskTitle: ms.task_title, goalLabel: ms.goal_label, projectTitle: ms.project_title, items: [] }
       acc[ms.task_id].items.push(ms)
       return acc
@@ -210,12 +210,12 @@ export default function MemberDashboardPage() {
           <div style={{ padding: '14px 16px' }}>
             <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-text)', marginBottom: 10 }}>
               <Briefcase size={13} style={{ marginRight: 5, verticalAlign: 'middle', color: 'var(--color-primary)' }} />
-              Projectos Envolvidos
+              Pilares Estratégicos Envolvidos
             </p>
             {projects.length === 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 100, color: 'var(--color-text-muted)', fontSize: 13 }}>
                 <Briefcase size={22} style={{ opacity: 0.2, marginBottom: 8 }} />
-                Sem projectos atribuídos.
+                Sem pilares estratégicos atribuídos.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -237,18 +237,18 @@ export default function MemberDashboardPage() {
         </Card>
       </div>
 
-      {/* ── Milestones by task ────────────────────────────────────────────── */}
+      {/* ── Indicadores by task ────────────────────────────────────────────── */}
       <Card padding={0}>
         <div style={{ padding: '14px 16px' }}>
           <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-text)', marginBottom: 14 }}>
             <CheckCircle2 size={13} style={{ marginRight: 5, verticalAlign: 'middle', color: 'var(--color-primary)' }} />
-            Os Meus Milestones
+            Os Meus Indicadores
           </p>
 
           {taskGroups.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 0', color: 'var(--color-text-muted)' }}>
               <CheckCircle2 size={30} style={{ opacity: 0.2, marginBottom: 10 }} />
-              <p style={{ fontSize: 13, fontWeight: 600 }}>Nenhum milestone atribuído ainda.</p>
+              <p style={{ fontSize: 13, fontWeight: 600 }}>Nenhum indicador atribuído ainda.</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -270,7 +270,7 @@ export default function MemberDashboardPage() {
                     <ChevronRight size={11} color="var(--color-text-muted)" />
                   </div>
 
-                  {/* Milestone rows */}
+                  {/* Indicador rows */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 10 }}>
                     {group.items.map((ms: any) => {
                       const sb  = STATUS_BADGE[ms.status] ?? { label: ms.status, variant: 'default' as const }
@@ -338,19 +338,19 @@ export default function MemberDashboardPage() {
               features={mapFeatures.map((f: any) => ({ geometry: f.geometry, properties: f.properties }))}
               height={360}
               renderPopupContent={(asc) => {
-                // Milestones in this ASC
-                const ascMilestones = milestones.filter(
+                // Indicadores in this ASC
+                const ascIndicadores = indicadores.filter(
                   (ms: any) => ms.scope_type === 'ASC' && Number(ms.scope_id) === asc.id
                 )
-                if (ascMilestones.length === 0) return null
+                if (ascIndicadores.length === 0) return null
                 return (
                   <div>
                     <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0 10px' }} />
                     <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                      Os meus milestones aqui
+                      Os meus indicadores aqui
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {ascMilestones.map((ms: any) => {
+                      {ascIndicadores.map((ms: any) => {
                         const sb  = STATUS_BADGE[ms.status] ?? { label: ms.status, variant: 'default' as const }
                         const pct = ms.planned_value > 0 ? Math.min(100, ((ms.achieved_value ?? 0) / ms.planned_value) * 100) : 0
                         const dotColor = sb.variant === 'success' ? 'var(--color-traffic-green)' : sb.variant === 'danger' ? 'var(--color-traffic-red)' : 'var(--color-traffic-yellow)'

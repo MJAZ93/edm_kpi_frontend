@@ -19,10 +19,16 @@ const schema = z.object({
   title: z.string().min(3, 'Mínimo 3 caracteres'),
   description: z.string().optional(),
   creator_type: z.enum(['CA', 'PELOURO', 'DIRECAO', 'DEPARTAMENTO']),
+  creator_org_id: z.string().optional(),
   parent_id: z.string().optional(),
   weight: z.coerce.number().min(0).max(100),
   start_date: z.string().min(1, 'Campo obrigatório'),
   end_date: z.string().min(1, 'Campo obrigatório'),
+  status: z.string().optional(),
+  goal_label: z.string().optional(),
+  frequency: z.string().optional(),
+  start_value: z.coerce.number().optional(),
+  target_value: z.coerce.number().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -32,6 +38,7 @@ interface Props {
   onSubmit: (payload: CreateProjectPayload) => void
   defaultValues?: Partial<FormValues>
   initialDirecaoIds?: number[]
+  editMode?: boolean
 }
 
 const ROLE_OPTS = [
@@ -41,7 +48,13 @@ const ROLE_OPTS = [
   { value: 'DEPARTAMENTO', label: 'Departamento' },
 ]
 
-export default function ProjectForm({ id, onSubmit, defaultValues, initialDirecaoIds = [] }: Props) {
+const STATUS_OPTS = [
+  { value: 'ACTIVE',    label: 'Activo' },
+  { value: 'COMPLETED', label: 'Concluído' },
+  { value: 'CANCELLED', label: 'Cancelado' },
+]
+
+export default function ProjectForm({ id, onSubmit, defaultValues, initialDirecaoIds = [], editMode = false }: Props) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'ADMIN'
 
@@ -52,7 +65,9 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
 
   const creatorType = watch('creator_type')
   const parentIdVal = watch('parent_id')
+  const creatorOrgIdVal = watch('creator_org_id')
   const showDirecoes = creatorType === 'CA' || creatorType === 'PELOURO'
+  const showSingleDirecao = creatorType === 'DIRECAO'
 
   // Selected direcoes state
   const [selectedDirecoes, setSelectedDirecoes] = useState<{ id: number; name: string }[]>([])
@@ -61,7 +76,7 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
   const { data: direoesData } = useQuery({
     queryKey: ['direcoes'],
     queryFn: () => orgService.listDirecoes(),
-    enabled: showDirecoes,
+    enabled: showDirecoes || showSingleDirecao,
   })
 
   const { data: parentProjects } = useQuery({
@@ -72,7 +87,7 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
   const direcaoOptions = direoesData?.data?.map(d => ({ value: String(d.id), label: d.name })) ?? []
 
   const parentOpts = [
-    { value: '', label: 'Nenhum (projecto raiz)' },
+    { value: '', label: 'Nenhum (pilar estratégico raiz)' },
     ...(parentProjects?.data?.map(p => ({ value: String(p.id), label: p.title })) ?? []),
   ]
 
@@ -92,10 +107,15 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
     onSubmit({
       ...v,
       parent_id: v.parent_id ? Number(v.parent_id) : undefined,
-      creator_org_id: undefined,
+      creator_org_id: v.creator_org_id ? Number(v.creator_org_id) : undefined,
       direcao_ids: showDirecoes && selectedDirecoes.length > 0
         ? selectedDirecoes.map(d => d.id)
         : undefined,
+      status: v.status || undefined,
+      goal_label: v.goal_label || undefined,
+      frequency: v.frequency || undefined,
+      start_value: v.start_value !== undefined && v.start_value !== null && !isNaN(v.start_value as number) ? v.start_value : undefined,
+      target_value: v.target_value !== undefined && v.target_value !== null && !isNaN(v.target_value as number) ? v.target_value : undefined,
     })
   }
 
@@ -129,9 +149,23 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
         </>
       )}
 
-      {/* Projecto pai */}
+      {/* Direcção dona — só para nível DIRECAO */}
+      {showSingleDirecao && (
+        <SearchableSelect
+          label="Direcção"
+          options={[
+            { value: '', label: 'Seleccionar direcção…' },
+            ...(direoesData?.data?.map(d => ({ value: String(d.id), label: d.name })) ?? []),
+          ]}
+          value={creatorOrgIdVal ?? ''}
+          onChange={val => setValue('creator_org_id', val)}
+          placeholder="Seleccionar direcção…"
+        />
+      )}
+
+      {/* Pilar Estratégico pai */}
       <SearchableSelect
-        label="Projecto pai"
+        label="Pilar Estratégico pai"
         options={parentOpts}
         value={parentIdVal ?? ''}
         onChange={val => setValue('parent_id', val)}
@@ -166,6 +200,81 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
           )}
         />
       </div>
+
+      {/* ── KPI / Objectivo numérico ────────────────────────────────────────── */}
+      <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-soft)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+          Objectivo KPI (opcional)
+        </p>
+
+        <Input
+          label="Indicador"
+          placeholder="Ex: Perdas comerciais, Nº de inspecções…"
+          {...register('goal_label')}
+        />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+          <Input
+            label="Valor Inicial (baseline)"
+            type="number"
+            step="any"
+            placeholder="Ex: 15"
+            {...register('start_value')}
+          />
+          <Input
+            label="Objectivo (meta)"
+            type="number"
+            step="any"
+            placeholder="Ex: 3"
+            {...register('target_value')}
+          />
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--color-text-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+            Frequência de actualização
+          </label>
+          <Controller
+            name="frequency"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                options={[
+                  { value: '',           label: 'Sem frequência definida' },
+                  { value: 'DAILY',      label: 'Diária' },
+                  { value: 'WEEKLY',     label: 'Semanal' },
+                  { value: 'MONTHLY',    label: 'Mensal' },
+                  { value: 'QUARTERLY',  label: 'Trimestral' },
+                  { value: 'BIANNUAL',   label: 'Semestral' },
+                  { value: 'ANNUAL',     label: 'Anual' },
+                ]}
+                value={field.value ?? ''}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
+      </div>
+
+      {/* Status — só visível no modo edição */}
+      {editMode && (
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--color-text-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+            Estado do Pilar Estratégico
+          </label>
+          <Controller
+            name="status"
+            control={control}
+            render={({ field }) => (
+              <SearchableSelect
+                options={STATUS_OPTS}
+                value={field.value ?? ''}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
+      )}
 
       {/* Direcções afectadas — só para CA / PELOURO */}
       {showDirecoes && (

@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   FolderKanban, ShieldAlert, TrendingUp, Trophy, ChevronRight,
   AlertOctagon, Users, Building2, Layers, Clock, Activity,
+  ListChecks, CheckCircle2, Circle,
 } from 'lucide-react'
 import { dashboardService } from '../../services/dashboard.service'
+import { milestonesService } from '../../services/milestones.service'
 import { useAuth } from '../../hooks/useAuth'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -81,8 +83,30 @@ function ScoreRing({ score, tl, size = 100 }: { score: number; tl: string; size?
 export default function DirecaoDashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  // Employee ranking state
   const [empCategory, setEmpCategory] = useState<string>('ALL')
   const [selectedEmp, setSelectedEmp] = useState<EmployeeRankItem | null>(null)
+
+  // Task accordion: which task's indicadores are expanded
+  const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null)
+  // Per-indicador editing: msId → input value string
+  const [editingValues, setEditingValues] = useState<Record<number, string>>({})
+
+  // Update indicador achieved_value + auto-set status
+  const updateMs = useMutation({
+    mutationFn: ({ id, achieved_value, planned_value }: { id: number; achieved_value: number; planned_value: number }) =>
+      milestonesService.update(id, {
+        achieved_value,
+        achieved_date: new Date().toISOString().split('T')[0],
+        status: achieved_value >= planned_value ? 'DONE' : 'PENDING',
+      } as any),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'direcao-overview'] })
+      setEditingValues({})
+    },
+  })
 
   // Data
   const { data: overview, isLoading } = useQuery({
@@ -106,11 +130,13 @@ export default function DirecaoDashboardPage() {
   // ── Derived ──────────────────────────────────────────────────────────────────
   const dir        = overview?.direction
   const projects   = (overview?.projects ?? []) as any[]
+  const dirTasks   = (overview?.dir_tasks ?? []) as any[]
   const stalled    = (overview?.stalled_tasks ?? []) as any[]
   const blockers   = (overview?.pending_blockers ?? []) as any[]
   const deptScores = (overview?.dept_scores ?? []) as any[]
   const employees: EmployeeRankItem[] = empData?.ranking ?? []
   const mapFeatures = mapData?.features ?? []
+
 
   const tl = (dir?.traffic_light ?? 'YELLOW') as TL
   const c  = TL_COLORS[tl]
@@ -182,7 +208,7 @@ export default function DirecaoDashboardPage() {
       {/* ── KPI stat cards ───────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         <StatCard
-          label="Projectos"
+          label="Pilares Estratégicos"
           value={projects.length}
           icon={<FolderKanban size={17} />}
         />
@@ -193,7 +219,7 @@ export default function DirecaoDashboardPage() {
           color="var(--color-traffic-yellow-bg)"
         />
         <StatCard
-          label="Tarefas Paradas"
+          label="Acções Paradas"
           value={stalled.length}
           icon={<AlertOctagon size={17} />}
           color={stalled.length > 0 ? 'var(--color-traffic-red-bg)' : 'var(--color-bg-strong)'}
@@ -205,6 +231,219 @@ export default function DirecaoDashboardPage() {
           color={blockers.length > 0 ? 'var(--color-traffic-red-bg)' : 'var(--color-bg-strong)'}
         />
       </div>
+
+      {/* ── Direction Tasks Accordion ────────────────────────────────────────── */}
+      {dirTasks.length > 0 && (
+        <Card variant="elevated" padding={0}>
+          <div style={{ padding: '14px 18px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+              <ListChecks size={15} style={{ color: 'var(--color-primary)' }} />
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Acções da Direcção
+              </p>
+              <Badge variant="default" style={{ marginLeft: 4 }}>{dirTasks.length}</Badge>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-muted)' }}>
+                Clique numa acção para ver e actualizar os marcos
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {dirTasks.map((task: any, taskIdx: number) => {
+              const isExpanded = expandedTaskId === task.id
+              const pct = Math.min(100, Math.max(0, task.progress_pct ?? 0))
+              const indicadores: any[] = task.indicadores ?? []
+              const pendingCount = indicadores.filter((m: any) => m.status === 'PENDING').length
+              const doneCount    = indicadores.filter((m: any) => m.status === 'DONE').length
+
+              return (
+                <div key={task.id} style={{ borderTop: taskIdx > 0 ? '1px solid var(--color-border)' : undefined }}>
+                  {/* Task header row – clickable */}
+                  <div
+                    onClick={() => {
+                      setExpandedTaskId(isExpanded ? null : task.id)
+                      setEditingValues({})
+                    }}
+                    style={{
+                      padding: '12px 18px',
+                      cursor: 'pointer',
+                      background: isExpanded ? 'var(--color-primary-bg)' : 'transparent',
+                      transition: 'background 150ms',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                    onMouseEnter={e => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-strong)' }}
+                    onMouseLeave={e => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                  >
+                    {/* Progress ring mini */}
+                    <div style={{
+                      width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                      background: `conic-gradient(var(--color-primary) ${pct * 3.6}deg, var(--color-border) 0deg)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: isExpanded ? 'var(--color-primary-bg)' : 'var(--color-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 9, fontWeight: 900, color: 'var(--color-primary)' }}>{pct.toFixed(0)}%</span>
+                      </div>
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
+                        {task.title}
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {task.project_title && (
+                          <span style={{ fontSize: 11, color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+                            {task.project_title}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 10, color: 'var(--color-text-muted)', flexShrink: 0 }}>
+                          {doneCount}/{indicadores.length} marcos concluídos
+                        </span>
+                        {pendingCount > 0 && (
+                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-primary)', background: 'var(--color-primary-bg)', borderRadius: 6, padding: '1px 7px', flexShrink: 0 }}>
+                            {pendingCount} por actualizar
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <span style={{ fontSize: 12, color: isExpanded ? 'var(--color-primary)' : 'var(--color-text-muted)', fontWeight: 700, flexShrink: 0 }}>
+                      {isExpanded ? '▲' : '▼'}
+                    </span>
+                  </div>
+
+                  {/* Expanded indicadores */}
+                  {isExpanded && (
+                    <div style={{ padding: '0 18px 16px', background: 'var(--color-primary-bg)' }}>
+                      {indicadores.length === 0 ? (
+                        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', textAlign: 'center', padding: '16px 0' }}>
+                          Sem marcos definidos para esta acção.
+                        </p>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {indicadores.map((ms: any) => {
+                            const isDone    = ms.status === 'DONE'
+                            const isBlocked = ms.status === 'BLOCKED'
+                            const planned   = ms.planned_value ?? 0
+                            const achieved  = ms.achieved_value ?? 0
+                            const msPct     = planned > 0 ? Math.min(100, Math.max(0, (achieved / planned) * 100)) : 0
+                            const barColor  = isDone ? 'var(--color-traffic-green)' : isBlocked ? 'var(--color-traffic-red)' : 'var(--color-primary)'
+                            const editVal   = editingValues[ms.id] ?? ''
+                            const isEditing = ms.id in editingValues
+
+                            return (
+                              <div
+                                key={ms.id}
+                                style={{
+                                  padding: '10px 13px',
+                                  borderRadius: 10,
+                                  background: 'var(--color-bg)',
+                                  border: isDone
+                                    ? '1px solid var(--color-traffic-green)44'
+                                    : isBlocked
+                                      ? '1px solid var(--color-traffic-red)44'
+                                      : '1px solid var(--color-primary)44',
+                                }}
+                              >
+                                {/* Title row */}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                                  <div style={{ marginTop: 1, flexShrink: 0, color: isDone ? 'var(--color-traffic-green)' : isBlocked ? 'var(--color-traffic-red)' : 'var(--color-primary)' }}>
+                                    {isDone ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <p style={{ fontSize: 12, fontWeight: 700, color: isDone ? 'var(--color-text-muted)' : 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none', marginBottom: 2 }}>
+                                      {ms.title}
+                                    </p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                      {ms.scope_name && (
+                                        <span style={{ fontSize: 10, color: 'var(--color-text-muted)', background: 'var(--color-bg-strong)', borderRadius: 5, padding: '1px 6px' }}>
+                                          {ms.scope_name}
+                                        </span>
+                                      )}
+                                      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                        <Clock size={9} />
+                                        {ms.planned_date ? new Date(ms.planned_date).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                                      </span>
+                                      <span style={{
+                                        fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 6,
+                                        background: isDone ? 'var(--color-traffic-green-bg)' : isBlocked ? 'var(--color-traffic-red-bg)' : 'var(--color-primary-bg)',
+                                        color: isDone ? 'var(--color-traffic-green)' : isBlocked ? 'var(--color-traffic-red)' : 'var(--color-primary)',
+                                      }}>
+                                        {isDone ? 'Concluído' : isBlocked ? 'Bloqueado' : 'Pendente'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Progress row */}
+                                <div style={{ marginBottom: !isDone && !isBlocked ? 8 : 0 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>Realizado</span>
+                                    <span style={{ fontSize: 14, fontWeight: 900, color: isDone ? 'var(--color-traffic-green)' : 'var(--color-text)' }}>
+                                      {achieved.toLocaleString('pt-MZ')}
+                                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)' }}> / {planned.toLocaleString('pt-MZ')}</span>
+                                    </span>
+                                  </div>
+                                  <div style={{ height: 6, borderRadius: 999, background: 'var(--color-border)', overflow: 'hidden' }}>
+                                    <div style={{ height: '100%', width: `${msPct}%`, borderRadius: 999, background: barColor, transition: 'width 500ms' }} />
+                                  </div>
+                                </div>
+
+                                {/* Inline numeric update — PENDING only */}
+                                {!isDone && !isBlocked && (
+                                  <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 8 }}>
+                                    {isEditing ? (
+                                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="any"
+                                          value={editVal}
+                                          onChange={e => setEditingValues(v => ({ ...v, [ms.id]: e.target.value }))}
+                                          placeholder={`Novo valor (máx ${planned})`}
+                                          style={{ flex: 1, padding: '6px 10px', borderRadius: 7, border: '1.5px solid var(--color-primary)', background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: 13, outline: 'none', fontWeight: 700 }}
+                                          autoFocus
+                                        />
+                                        <button
+                                          disabled={editVal === '' || updateMs.isPending}
+                                          onClick={() => updateMs.mutate({ id: ms.id, achieved_value: parseFloat(editVal), planned_value: planned })}
+                                          style={{ padding: '6px 16px', borderRadius: 7, background: editVal !== '' ? 'var(--color-primary)' : 'var(--color-border)', color: editVal !== '' ? '#fff' : 'var(--color-text-muted)', border: 'none', cursor: editVal !== '' ? 'pointer' : 'not-allowed', fontSize: 12, fontWeight: 800, flexShrink: 0 }}
+                                        >
+                                          {updateMs.isPending ? '…' : 'Guardar'}
+                                        </button>
+                                        <button
+                                          onClick={() => setEditingValues(v => { const n = { ...v }; delete n[ms.id]; return n })}
+                                          style={{ padding: '6px 10px', borderRadius: 7, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 12 }}
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={e => { e.stopPropagation(); setEditingValues(v => ({ ...v, [ms.id]: String(achieved) })) }}
+                                        style={{ width: '100%', padding: '7px 0', borderRadius: 7, background: 'var(--color-primary-bg)', border: '1.5px solid var(--color-primary)44', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 800 }}
+                                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-primary)', (e.currentTarget.style.color = '#fff'))}
+                                        onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-primary-bg)', (e.currentTarget.style.color = 'var(--color-primary)'))}
+                                      >
+                                        ✏ Actualizar progresso
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* ── Departments performance ───────────────────────────────────────────── */}
       {deptScores.length > 0 && (
@@ -261,7 +500,7 @@ export default function DirecaoDashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <FolderKanban size={15} style={{ color: 'var(--color-primary)' }} />
             <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Projectos da Direcção
+              Pilares Estratégicos da Direcção
             </p>
             <Badge variant="default" style={{ marginLeft: 4 }}>{projects.length}</Badge>
           </div>
@@ -275,7 +514,7 @@ export default function DirecaoDashboardPage() {
 
         {projects.length === 0 ? (
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', padding: '12px 0', textAlign: 'center' }}>
-            Sem projectos atribuídos a esta direcção.
+            Sem pilares estratégicos atribuídos a esta direcção.
           </p>
         ) : (
           <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
@@ -325,6 +564,7 @@ export default function DirecaoDashboardPage() {
         )}
       </Card>
 
+
       {/* ── Stalled tasks + Blockers ──────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
@@ -333,7 +573,7 @@ export default function DirecaoDashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <AlertOctagon size={15} style={{ color: 'var(--color-traffic-red)' }} />
             <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Tarefas Paradas
+              Acções Paradas
             </p>
             {stalled.length > 0 && (
               <Badge variant="danger" style={{ marginLeft: 4 }}>{stalled.length}</Badge>
@@ -343,7 +583,7 @@ export default function DirecaoDashboardPage() {
           {stalled.length === 0 ? (
             <div style={{ padding: '24px 0', textAlign: 'center' }}>
               <TrendingUp size={28} style={{ color: 'var(--color-traffic-green)', marginBottom: 8, opacity: 0.7 }} />
-              <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Sem tarefas paradas</p>
+              <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Sem acções paradas</p>
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>Todos os indicadores estão a progredir</p>
             </div>
           ) : (
@@ -488,7 +728,14 @@ export default function DirecaoDashboardPage() {
               properties: f.properties,
             }))}
             height={400}
-            onSelect={() => navigate('/analytics/map')}
+            renderPopupContent={(_props, _close) => (
+              <button
+                onClick={() => navigate('/analytics/map')}
+                style={{ width: '100%', marginTop: 4, padding: '7px 0', borderRadius: 8, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+              >
+                Ver no mapa completo →
+              </button>
+            )}
           />
         ) : (
           <div style={{
@@ -508,7 +755,8 @@ export default function DirecaoDashboardPage() {
         )}
       </Card>
 
-      {/* ── Employee ranking ─────────────────────────────────────────────────── */}
+      {/* ── Employee ranking + Top dept ranking (side by side) ──────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: deptScores.length > 1 ? '1fr 1fr' : '1fr', gap: 20, alignItems: 'start' }}>
       <Card variant="elevated">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -687,7 +935,7 @@ export default function DirecaoDashboardPage() {
                       {selectedEmp.ms_total > 0 && (
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' }}>Milestones</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' }}>Indicadores</span>
                             <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text)' }}>
                               {selectedEmp.ms_done}/{selectedEmp.ms_total} ({msPct.toFixed(0)}%)
                             </span>
@@ -721,7 +969,7 @@ export default function DirecaoDashboardPage() {
 
       {/* ── Top dept ranking ─────────────────────────────────────────────────── */}
       {deptScores.length > 1 && (
-        <Card variant="elevated">
+        <Card variant="elevated" style={{ alignSelf: 'start' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <Trophy size={15} style={{ color: 'var(--color-primary)' }} />
             <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -766,6 +1014,7 @@ export default function DirecaoDashboardPage() {
           </div>
         </Card>
       )}
+      </div>
     </div>
   )
 }

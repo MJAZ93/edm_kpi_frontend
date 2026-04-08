@@ -36,11 +36,11 @@ export default function ProjectsPage() {
   const create = useMutation({
     mutationFn: (payload: CreateProjectPayload) => projectsService.create(payload),
     onSuccess: () => {
-      toast.success('Projecto criado com sucesso.')
+      toast.success('Pilar Estratégico criado com sucesso.')
       qc.invalidateQueries({ queryKey: ['projects'] })
       setModalOpen(false)
     },
-    onError: () => toast.error('Erro ao criar projecto.'),
+    onError: () => toast.error('Erro ao criar pilar estratégico.'),
   })
 
   const projects = data?.data ?? []
@@ -49,11 +49,11 @@ export default function ProjectsPage() {
     <div>
       <PageHeader
         eyebrow="Gestão"
-        title="Projectos"
-        subtitle={`${data?.total ?? 0} projectos encontrados`}
+        title="Pilares Estratégicos"
+        subtitle={`${data?.total ?? 0} pilares estratégicos encontrados`}
         actions={can('create:project') && (
           <Button variant="primary" icon={<Plus size={15} />} onClick={() => setModalOpen(true)}>
-            Novo Projecto
+            Novo Pilar Estratégico
           </Button>
         )}
       />
@@ -74,10 +74,10 @@ export default function ProjectsPage() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>
       ) : projects.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 80, color: 'var(--color-text-muted)' }}>
-          <p style={{ fontSize: 15, fontWeight: 600 }}>Nenhum projecto encontrado.</p>
+          <p style={{ fontSize: 15, fontWeight: 600 }}>Nenhum pilar estratégico encontrado.</p>
           {can('create:project') && (
             <Button variant="primary" icon={<Plus size={14} />} onClick={() => setModalOpen(true)} style={{ marginTop: 16 }}>
-              Criar primeiro projecto
+              Criar primeiro pilar estratégico
             </Button>
           )}
         </div>
@@ -93,21 +93,26 @@ export default function ProjectsPage() {
               endDate={p.end_date}
               totalScore={p.performance?.total_score ?? 0}
               executionScore={p.performance?.execution_score ?? 0}
+              goalScore={p.performance?.goal_score}
               trafficLight={(p.performance?.traffic_light ?? 'YELLOW') as 'GREEN' | 'YELLOW' | 'RED'}
               weight={p.weight}
               status={p.status}
+              goalLabel={p.goal_label}
+              startValue={p.start_value}
+              targetValue={p.target_value}
+              currentValue={p.current_value}
               onClick={() => navigate(`/projects/${p.id}`)}
             />
           ))}
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Novo Projecto" width={580}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Novo Pilar Estratégico" width={580}
         footer={
           <>
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button variant="primary" icon={<Plus size={14} />} form="project-form" type="submit" loading={create.isPending}>
-              Criar Projecto
+              Criar Pilar Estratégico
             </Button>
           </>
         }

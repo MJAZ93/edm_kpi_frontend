@@ -13,9 +13,9 @@ import Avatar from '../../components/ui/Avatar'
 
 const ENTITY_OPTS = [
   { value: '', label: 'Todas as entidades' },
-  { value: 'PROJECT', label: 'Projecto' },
-  { value: 'TASK', label: 'Tarefa' },
-  { value: 'MILESTONE', label: 'Marco' },
+  { value: 'PROJECT', label: 'Pilar Estratégico' },
+  { value: 'TASK', label: 'Acção' },
+  { value: 'MILESTONE', label: 'Indicador' },
   { value: 'BLOCKER', label: 'Impedimento' },
   { value: 'USER', label: 'Utilizador' },
   { value: 'PELOURO', label: 'Pelouro' },

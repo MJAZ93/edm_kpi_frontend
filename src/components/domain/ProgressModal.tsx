@@ -7,7 +7,7 @@ import { milestonesService } from '../../services/milestones.service'
 import Spinner from '../ui/Spinner'
 
 interface ProgressModalProps {
-  /** Full milestone object (or at minimum: id, title, achieved_value, planned_value, status) */
+  /** Full indicador object (or at minimum: id, title, achieved_value, planned_value, status) */
   ms: {
     id: number
     title: string

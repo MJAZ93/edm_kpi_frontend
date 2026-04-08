@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, MapPin, Target } from 'lucide-react'
+import { Plus, FileText, MapPin, Target, Pencil } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { tasksService } from '../../services/tasks.service'
 import { milestonesService } from '../../services/milestones.service'
@@ -29,7 +29,8 @@ import ProgressModal from '../../components/domain/ProgressModal'
 import ForecastAlert from '../../components/domain/ForecastAlert'
 import ForecastChart from '../../components/charts/ForecastChart'
 import ScopeMap from '../../components/map/ScopeMap'
-import type { CreateMilestonePayload, CreateBlockerPayload, ScopeType, MilestoneStatus, BlockerType, ASC, Regiao } from '../../types'
+import TaskForm from './TaskForm'
+import type { CreateMilestonePayload, CreateBlockerPayload, CreateTaskPayload, ScopeType, MilestoneStatus, BlockerType, ASC, Regiao } from '../../types'
 
 function fmtDate(d?: string) {
   if (!d) return '—'
@@ -55,7 +56,7 @@ const BLOCKER_TYPE_OPTS = [
   { value: 'TECHNICAL', label: 'Técnico' }, { value: 'LEGAL', label: 'Legal' },
 ]
 
-// ── Milestone form section header ─────────────────────────────────────────────
+// ── Indicador form section header ─────────────────────────────────────────────
 function MsSectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 8, marginBottom: 2, borderBottom: '1px solid var(--color-border)' }}>
@@ -67,8 +68,8 @@ function MsSectionHeader({ icon, label }: { icon: React.ReactNode; label: string
   )
 }
 
-// ── Milestone form inner component ────────────────────────────────────────────
-interface MilestoneFormProps {
+// ── Indicador form inner component ────────────────────────────────────────────
+interface IndicadorFormProps {
   msTitle: string; setMsTitle: (v: string) => void
   msScopeType: ScopeType | ''; setMsScopeType: (v: ScopeType | '') => void
   msScopeId: string; setMsScopeId: (v: string) => void
@@ -83,10 +84,10 @@ interface MilestoneFormProps {
   taskStartDate?: string   // YYYY-MM-DD
   taskEndDate?: string     // YYYY-MM-DD
   taskTargetValue?: number
-  taskTotalPlanned?: number  // sum of already-created milestones
+  taskTotalPlanned?: number  // sum of already-created indicadores
 }
 
-function MilestoneForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msScopeId, setMsScopeId, msPlanned, setMsPlanned, msDate, setMsDate, msNotes, setMsNotes, ascs, regioes, goalLabel, deptUsers, msAssignedTo, setMsAssignedTo, currentUserId, taskStartDate, taskEndDate, taskTargetValue, taskTotalPlanned }: MilestoneFormProps) {
+function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msScopeId, setMsScopeId, msPlanned, setMsPlanned, msDate, setMsDate, msNotes, setMsNotes, ascs, regioes, goalLabel, deptUsers, msAssignedTo, setMsAssignedTo, currentUserId, taskStartDate, taskEndDate, taskTargetValue, taskTotalPlanned }: IndicadorFormProps) {
   const scopeEntityOptions = msScopeType === 'ASC'
     ? ascs.map(a => ({ value: String(a.id), label: a.name }))
     : msScopeType === 'REGIAO'
@@ -158,12 +159,12 @@ function MilestoneForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
             <div style={{ padding: '10px 14px', background: 'var(--color-surface-muted)', borderRadius: 10, border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
               {/* Objectivo row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Objectivo da tarefa</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Objectivo da acção</span>
                 <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)' }}>{taskTargetValue.toLocaleString('pt-PT')} {goalLabel ?? ''}</span>
               </div>
               {/* Already assigned row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)' }}>Já atribuído a milestones</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)' }}>Já atribuído a indicadores</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)' }}>{alreadyPlanned.toLocaleString('pt-PT')}</span>
               </div>
               {/* Remaining row */}
@@ -181,7 +182,7 @@ function MilestoneForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
                   <div style={{ height: 1, background: 'var(--color-border)', margin: '2px 0' }} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: overTarget ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
-                      {overTarget ? '🚀 Com este milestone' : 'Com este milestone'}
+                      {overTarget ? '🚀 Com este indicador' : 'Com este indicador'}
                     </span>
                     <span style={{ fontSize: 12, fontWeight: 800, color: overTarget ? 'var(--color-primary)' : 'var(--color-traffic-green)' }}>
                       {afterThis.toLocaleString('pt-PT')} ({afterPct.toFixed(0)}%{overTarget ? ' — acima do objectivo, é permitido' : ''})
@@ -191,7 +192,7 @@ function MilestoneForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
                   <div style={{ height: 6, borderRadius: 4, background: 'var(--color-border)', overflow: 'hidden', position: 'relative' }}>
                     {/* Previous planned */}
                     <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(100, (alreadyPlanned / taskTargetValue) * 100)}%`, background: 'var(--color-primary)60', transition: 'width .3s' }} />
-                    {/* This milestone addition */}
+                    {/* This indicador addition */}
                     <div style={{
                       position: 'absolute', left: `${Math.min(100, (alreadyPlanned / taskTargetValue) * 100)}%`, top: 0, height: '100%',
                       width: `${Math.min(100 - Math.min(100, (alreadyPlanned / taskTargetValue) * 100), (thisVal / taskTargetValue) * 100)}%`,
@@ -257,13 +258,14 @@ export default function TaskDetailPage() {
   const { can, user, isDepartamento } = useAuth()
   const qc = useQueryClient()
 
-  const [milestoneModal, setMilestoneModal] = useState(false)
+  const [editModal, setEditModal] = useState(false)
+  const [indicadorModal, setIndicadorModal] = useState(false)
   const [updateMs, setUpdateMs] = useState<any | null>(null)
   const [blockerModal, setBlockerModal] = useState<number | null>(null)
   const [rejectModal, setRejectModal] = useState<number | null>(null)
   const [rejectReason, setRejectReason] = useState('')
 
-  // Milestone form state
+  // Indicador form state
   const [msTitle, setMsTitle] = useState('')
   const [msScopeType, setMsScopeType] = useState<ScopeType | ''>('')
   const [msScopeId, setMsScopeId] = useState('')
@@ -282,8 +284,8 @@ export default function TaskDetailPage() {
     queryFn: () => tasksService.get(taskId),
   })
 
-  const { data: milestonesData } = useQuery({
-    queryKey: ['milestones', { task_id: taskId }],
+  const { data: indicadoresData } = useQuery({
+    queryKey: ['indicadores', { task_id: taskId }],
     queryFn: () => milestonesService.list(taskId),
     enabled: !!taskId,
   })
@@ -300,11 +302,11 @@ export default function TaskDetailPage() {
     enabled: !!taskId,
   })
 
-  // Geo data for milestone scope picker
+  // Geo data for indicador scope picker
   const { data: ascsData }    = useQuery({ queryKey: ['geo', 'ascs'],    queryFn: () => geoService.listAscs()    })
   const { data: regioesData } = useQuery({ queryKey: ['geo', 'regioes'], queryFn: () => geoService.listRegioes() })
 
-  // Dept users — only for DEPARTAMENTO role (to assign milestones to technicians)
+  // Dept users — only for DEPARTAMENTO role (to assign indicadores to technicians)
   const { data: deptOverview } = useQuery({
     queryKey: ['dashboard', 'departamento-overview'],
     queryFn: dashboardService.getDepartamentoOverview,
@@ -312,10 +314,16 @@ export default function TaskDetailPage() {
   })
   const deptUsers: { id: number; name: string }[] = isDepartamento() ? (deptOverview?.users ?? []) : []
 
+  const updateTask = useMutation({
+    mutationFn: (payload: Partial<CreateTaskPayload>) => tasksService.update(taskId, payload),
+    onSuccess: () => { toast.success('Acção actualizada.'); qc.invalidateQueries({ queryKey: ['tasks', taskId] }); setEditModal(false) },
+    onError: () => toast.error('Erro ao actualizar acção.'),
+  })
+
   const createMs = useMutation({
     mutationFn: (p: CreateMilestonePayload) => milestonesService.create(taskId, p),
-    onSuccess: () => { toast.success('Milestone criado.'); qc.invalidateQueries({ queryKey: ['milestones'] }); setMilestoneModal(false) },
-    onError: () => toast.error('Erro ao criar milestone.'),
+    onSuccess: () => { toast.success('Indicador criado.'); qc.invalidateQueries({ queryKey: ['indicadores'] }); setIndicadorModal(false) },
+    onError: () => toast.error('Erro ao criar indicador.'),
   })
 
   const createBlocker = useMutation({
@@ -337,17 +345,32 @@ export default function TaskDetailPage() {
   })
 
   if (isLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>
-  if (!task) return <div style={{ padding: 40 }}>Tarefa não encontrada.</div>
+  if (!task) return <div style={{ padding: 40 }}>Acção não encontrada.</div>
 
-  const milestones = milestonesData?.data ?? []
+  const indicadores = indicadoresData?.data ?? []
   const blockers = blockersData?.data ?? []
   const startVal = task.start_value ?? 0
   const currentVal = task.current_value ?? 0
   const targetVal = task.target_value ?? 0
   const pct = targetVal > startVal ? Math.min(100, ((currentVal - startVal) / (targetVal - startVal)) * 100) : 0
 
-  const totalPlanned = milestones.reduce((sum, m) => sum + (m.planned_value ?? 0), 0)
+  const totalPlanned = indicadores.reduce((sum: number, m: any) => sum + (m.planned_value ?? 0), 0)
   const unassigned = Math.max(0, targetVal - totalPlanned)
+
+  // Resolve scope label from loaded geo data
+  const scopeLabelFor = (m: any): string | undefined => {
+    if (!m.scope_type || !m.scope_id) return undefined
+    if (m.scope_type === 'ASC') {
+      const asc = ascsData?.data?.find((a: any) => a.id === m.scope_id)
+      return asc ? asc.name : `ASC #${m.scope_id}`
+    }
+    if (m.scope_type === 'REGIONAL' || m.scope_type === 'REGIAO') {
+      const r = regioesData?.data?.find((r: any) => r.id === m.scope_id)
+      return r ? r.name : `Região #${m.scope_id}`
+    }
+    if (m.scope_type === 'NACIONAL') return 'Nacional'
+    return undefined
+  }
 
   const forecastData = forecast ? [
     { period: 'Início', actual: forecast.start_value },
@@ -373,7 +396,7 @@ export default function TaskDetailPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Tarefas"
+        eyebrow="Acções"
         title={task.title}
         subtitle={task.description}
         badges={
@@ -382,6 +405,13 @@ export default function TaskDetailPage() {
             <Badge variant="orange">{task.goal_label}</Badge>
             <Badge variant="default">{fmtDate(task.start_date)} → {fmtDate(task.end_date)}</Badge>
           </>
+        }
+        actions={
+          can('create:task') && (
+            <Button variant="secondary" icon={<Pencil size={14} />} onClick={() => setEditModal(true)}>
+              Editar
+            </Button>
+          )
         }
       />
 
@@ -406,19 +436,19 @@ export default function TaskDetailPage() {
         </div>
         <ProgressBar value={pct} variant="auto" height={10} showLabel />
 
-        {/* Milestone coverage hint */}
-        {milestones.length > 0 && (
+        {/* Indicador coverage hint */}
+        {indicadores.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border)', flexWrap: 'wrap', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              <strong style={{ color: 'var(--color-text)' }}>{totalPlanned.toLocaleString('pt-PT')}</strong> atribuídos em milestones
+              <strong style={{ color: 'var(--color-text)' }}>{totalPlanned.toLocaleString('pt-PT')}</strong> atribuídos em indicadores
             </span>
             {unassigned > 0 ? (
               <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-traffic-red)' }}>
-                ⚠ {unassigned.toLocaleString('pt-PT')} por distribuir por milestones
+                ⚠ {unassigned.toLocaleString('pt-PT')} por distribuir por indicadores
               </span>
             ) : (
               <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-traffic-green)' }}>
-                ✓ Objectivo totalmente distribuído por milestones
+                ✓ Objectivo totalmente distribuído por indicadores
               </span>
             )}
           </div>
@@ -439,27 +469,27 @@ export default function TaskDetailPage() {
       )}
 
       <Tabs tabs={[
-        { key: 'milestones', label: `Milestones (${milestones.length})` },
+        { key: 'indicadores', label: `Indicadores (${indicadores.length})` },
         { key: 'forecast', label: 'Previsão' },
         { key: 'blockers', label: `Impedimentos (${blockers.length})` },
         { key: 'scopes', label: 'Âmbito' },
       ]}>
         {(activeTab) => {
-          if (activeTab === 'milestones') return (
+          if (activeTab === 'indicadores') return (
             <div>
               {can('update:milestone') && (
                 <div style={{ marginBottom: 16 }}>
-                  <Button variant="primary" icon={<Plus size={14} />} onClick={() => { setMsTitle(''); setMsDate(''); setMsPlanned(''); setMsAssignedTo(''); setMilestoneModal(true) }}>
-                    Novo Milestone
+                  <Button variant="primary" icon={<Plus size={14} />} onClick={() => { setMsTitle(''); setMsDate(''); setMsPlanned(''); setMsAssignedTo(''); setIndicadorModal(true) }}>
+                    Novo Indicador
                   </Button>
                 </div>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
-                {milestones.map(m => (
+                {indicadores.map(m => (
                   <MilestoneCard
                     key={m.id}
                     title={m.title}
-                    scopeLabel={m.scope_name}
+                    scopeLabel={scopeLabelFor(m)}
                     plannedValue={m.planned_value}
                     achievedValue={m.achieved_value}
                     plannedDate={m.planned_date}
@@ -470,7 +500,7 @@ export default function TaskDetailPage() {
                     onUpdate={can('update:milestone') && m.status !== 'DONE' ? () => setUpdateMs(m) : undefined}
                   />
                 ))}
-                {milestones.length === 0 && <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>Nenhum milestone criado.</p>}
+                {indicadores.length === 0 && <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>Nenhum indicador criado.</p>}
               </div>
             </div>
           )
@@ -589,11 +619,11 @@ export default function TaskDetailPage() {
         }}
       </Tabs>
 
-      {/* Create Milestone Modal */}
-      <Modal open={milestoneModal} onClose={() => setMilestoneModal(false)} title="Novo Milestone" width={540}
+      {/* Create Indicador Modal */}
+      <Modal open={indicadorModal} onClose={() => setIndicadorModal(false)} title="Novo Indicador" width={540}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setMilestoneModal(false)}>Cancelar</Button>
+            <Button variant="secondary" onClick={() => setIndicadorModal(false)}>Cancelar</Button>
             <Button
               variant="primary"
               icon={<Plus size={13} />}
@@ -606,7 +636,7 @@ export default function TaskDetailPage() {
           </>
         }
       >
-        <MilestoneForm
+        <IndicadorForm
           msTitle={msTitle} setMsTitle={setMsTitle}
           msScopeType={msScopeType} setMsScopeType={v => { setMsScopeType(v); setMsScopeId('') }}
           msScopeId={msScopeId} setMsScopeId={setMsScopeId}
@@ -626,7 +656,7 @@ export default function TaskDetailPage() {
         />
       </Modal>
 
-      {/* Update Milestone — shared ProgressModal */}
+      {/* Update Indicador — shared ProgressModal */}
       {updateMs && (
         <ProgressModal
           ms={updateMs}
@@ -634,7 +664,7 @@ export default function TaskDetailPage() {
           onClose={() => setUpdateMs(null)}
           onSuccess={() => {
             setUpdateMs(null)
-            qc.invalidateQueries({ queryKey: ['milestones'] })
+            qc.invalidateQueries({ queryKey: ['indicadores'] })
             qc.invalidateQueries({ queryKey: ['tasks', taskId] })
           }}
         />
@@ -656,6 +686,40 @@ export default function TaskDetailPage() {
           </div>
           <Textarea label="Descrição" rows={4} value={blDesc} onChange={e => setBlDesc(e.target.value)} placeholder="Descreva o impedimento em detalhe…" />
         </div>
+      </Modal>
+
+      {/* Edit task modal */}
+      <Modal open={editModal} onClose={() => setEditModal(false)} title="Editar Acção" width={620}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditModal(false)}>Cancelar</Button>
+            <Button variant="primary" type="submit" form="edit-task-form" loading={updateTask.isPending}>Guardar</Button>
+          </>
+        }
+      >
+        <TaskForm
+          id="edit-task-form"
+          projectId={task.project_id}
+          onSubmit={payload => updateTask.mutate(payload)}
+          initialScopes={(task.scopes ?? []).map(s => ({
+            scope_type: s.scope_type as ScopeType,
+            scope_id:   s.scope_id ?? 0,
+            name:       s.scope_name ?? `#${s.scope_id}`,
+          }))}
+          defaultValues={{
+            title:        task.title,
+            description:  task.description ?? '',
+            owner_type:   task.owner_type as any,
+            owner_id:     task.owner_id,
+            frequency:    task.frequency as any,
+            goal_label:   task.goal_label,
+            start_value:  task.start_value ?? 0,
+            target_value: task.target_value ?? 0,
+            weight:       task.weight ?? 100,
+            start_date:   task.start_date ? task.start_date.slice(0, 10) : '',
+            end_date:     task.end_date   ? task.end_date.slice(0, 10)   : '',
+          }}
+        />
       </Modal>
 
       {/* Reject modal */}

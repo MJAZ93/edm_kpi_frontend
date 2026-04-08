@@ -12,7 +12,7 @@ interface TaskCardProps {
   startValue: number
   currentValue: number
   targetValue: number
-  milestonesTotal: number
+  indicadoresTotal: number
   milesDone: number
   trafficLight: 'GREEN' | 'YELLOW' | 'RED'
   ownerLabel: string
@@ -24,7 +24,7 @@ const freqLabel: Record<string, string> = {
   QUARTERLY: 'Trimestral', BIANNUAL: 'Semestral', ANNUAL: 'Anual',
 }
 
-export default function TaskCard({ title, frequency, goalLabel, startValue, currentValue, targetValue, milestonesTotal, milesDone, trafficLight, ownerLabel, onClick }: TaskCardProps) {
+export default function TaskCard({ title, frequency, goalLabel, startValue, currentValue, targetValue, indicadoresTotal, milesDone, trafficLight, ownerLabel, onClick }: TaskCardProps) {
   const pct = targetValue > 0 ? Math.min(100, ((currentValue - startValue) / (targetValue - startValue)) * 100) : 0
 
   return (
@@ -53,7 +53,7 @@ export default function TaskCard({ title, frequency, goalLabel, startValue, curr
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600 }}>
-          {milesDone}/{milestonesTotal} milestones
+          {milesDone}/{indicadoresTotal} indicadores
         </span>
         <ChevronRight size={15} style={{ color: 'var(--color-text-muted)' }} />
       </div>

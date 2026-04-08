@@ -14,7 +14,7 @@ import { pt } from 'date-fns/locale'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export interface GanttMilestone {
+export interface GanttIndicador {
   id: number
   title: string
   planned_date: string
@@ -29,7 +29,7 @@ export interface GanttTask {
   end_date: string
   traffic_light?: 'GREEN' | 'YELLOW' | 'RED'
   owner_label?: string
-  milestones?: GanttMilestone[]
+  indicadores?: GanttIndicador[]
 }
 
 interface GanttChartProps {
@@ -79,7 +79,7 @@ export default function GanttChart({ tasks, projectStart, projectEnd, onTaskClic
   if (tasks.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-text-muted)', fontSize: 13 }}>
-        Nenhuma tarefa com datas definidas para mostrar no cronograma.
+        Nenhuma acção com datas definidas para mostrar no cronograma.
       </div>
     )
   }
@@ -148,7 +148,7 @@ export default function GanttChart({ tasks, projectStart, projectEnd, onTaskClic
             borderBottom: '1.5px solid var(--color-border)',
           }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Tarefa
+              Acção
             </span>
           </div>
           {/* Rows */}
@@ -305,8 +305,8 @@ export default function GanttChart({ tasks, projectStart, projectEnd, onTaskClic
                     </span>
                   </div>
 
-                  {/* Milestone diamonds */}
-                  {task.milestones?.map(ms => {
+                  {/* Indicador diamonds */}
+                  {task.indicadores?.map(ms => {
                     const msDate = safeParse(ms.planned_date)
                     if (!msDate) return null
                     const msPct = toPercent(msDate)

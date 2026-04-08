@@ -105,8 +105,8 @@ export default function RegionalDashboardPage() {
 
   const ascs: any[]        = overview?.ascs       ?? []
   const projects: any[]    = overview?.projects    ?? []
-  const milestones: any[]  = overview?.milestones  ?? []
-  const stats              = overview?.stats       ?? { total_milestones: 0, done: 0, pending: 0, blocked: 0 }
+  const indicadores: any[]  = overview?.indicadores  ?? []
+  const stats              = overview?.stats       ?? { total_indicadores: 0, done: 0, pending: 0, blocked: 0 }
 
   const tl = tlKey(regiao.traffic_light)
   const c  = TL_COLORS[tl]
@@ -160,7 +160,7 @@ export default function RegionalDashboardPage() {
         {/* Stat chips */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
-            { icon: <TrendingUp size={13} />,   label: 'Total',      val: stats.total_milestones, bg: 'var(--color-primary)' },
+            { icon: <TrendingUp size={13} />,   label: 'Total',      val: stats.total_indicadores, bg: 'var(--color-primary)' },
             { icon: <CheckCircle2 size={13} />, label: 'Concluídos', val: stats.done,              bg: 'var(--color-traffic-green)' },
             { icon: <Clock size={13} />,        label: 'Pendentes',  val: stats.pending,            bg: 'var(--color-traffic-yellow)' },
             { icon: <ShieldAlert size={13} />,  label: 'Bloqueados', val: stats.blocked,            bg: 'var(--color-traffic-red)' },
@@ -227,12 +227,12 @@ export default function RegionalDashboardPage() {
           <div style={{ padding: '14px 16px' }}>
             <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-text)', marginBottom: 12 }}>
               <FolderKanban size={13} style={{ marginRight: 5, verticalAlign: 'middle', color: 'var(--color-primary)' }} />
-              Projectos na Região
+              Pilares Estratégicos na Região
             </p>
             {projects.length === 0 ? (
               <div style={{ height: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--color-text-muted)', fontSize: 13 }}>
                 <FolderKanban size={24} style={{ opacity: 0.2 }} />
-                Sem projectos associados.
+                Sem pilares estratégicos associados.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -254,26 +254,26 @@ export default function RegionalDashboardPage() {
         </Card>
       </div>
 
-      {/* ── Milestones da Região ─────────────────────────────────────────────── */}
+      {/* ── Indicadores da Região ─────────────────────────────────────────────── */}
       <Card padding={0}>
         <div style={{ padding: '14px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <ListChecks size={13} style={{ color: 'var(--color-primary)' }} />
             <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-text)' }}>
-              Milestones da Região
+              Indicadores da Região
             </p>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', marginLeft: 4 }}>
-              ({milestones.length})
+              ({indicadores.length})
             </span>
           </div>
 
-          {milestones.length === 0 ? (
+          {indicadores.length === 0 ? (
             <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)', fontSize: 13 }}>
-              Sem milestones associados a esta região.
+              Sem indicadores associados a esta região.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {milestones.map((ms: any) => {
+              {indicadores.map((ms: any) => {
                 const pct = ms.planned_value > 0
                   ? Math.min(100, Math.max(0, ((ms.achieved_value ?? 0) / ms.planned_value) * 100))
                   : 0

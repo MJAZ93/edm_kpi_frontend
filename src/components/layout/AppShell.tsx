@@ -5,7 +5,7 @@ import { useNotificationCount } from '../../hooks/useNotificationCount'
 
 const BREADCRUMBS: Record<string, string[]> = {
   '/dashboard':              ['EDM KPI', 'Dashboard'],
-  '/projects':               ['EDM KPI', 'Projectos'],
+  '/projects':               ['EDM KPI', 'Pilares Estratégicos'],
   '/analytics':              ['EDM KPI', 'Analytics'],
   '/analytics/drill-down':   ['EDM KPI', 'Analytics', 'Drill-Down'],
   '/analytics/map':          ['EDM KPI', 'Analytics', 'Mapa'],

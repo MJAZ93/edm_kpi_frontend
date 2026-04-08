@@ -278,15 +278,15 @@ export default function MapPage() {
                   <>
                     {/* Count pills */}
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <StatPill label="Tarefas" value={scopeStats.task_count} />
-                      <StatPill label="Projectos" value={scopeStats.project_count} />
+                      <StatPill label="Acções" value={scopeStats.task_count} />
+                      <StatPill label="Pilares Estratégicos" value={scopeStats.project_count} />
                       <StatPill label="Direcções" value={scopeStats.direction_count} />
                     </div>
 
                     {/* Projects */}
                     {scopeStats.projects.length > 0 && (
                       <div>
-                        <SectionHead icon={<FolderKanban size={12} />} label="Projectos" />
+                        <SectionHead icon={<FolderKanban size={12} />} label="Pilares Estratégicos" />
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                           {scopeStats.projects.map(p => (
                             <div
@@ -334,7 +334,7 @@ export default function MapPage() {
                     {/* Tasks */}
                     {scopeStats.tasks.length > 0 && (
                       <div>
-                        <SectionHead icon={<ListChecks size={12} />} label="Tarefas" />
+                        <SectionHead icon={<ListChecks size={12} />} label="Acções" />
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                           {scopeStats.tasks.map(t => {
                             const pct = t.target_value > 0 ? Math.min(100, (t.current_value / t.target_value) * 100) : 0
@@ -359,7 +359,7 @@ export default function MapPage() {
 
                     {scopeStats.task_count === 0 && (
                       <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic', textAlign: 'center' }}>
-                        Sem tarefas atribuídas a {selected ? 'esta ASC' : 'esta região'}.
+                        Sem acções atribuídas a {selected ? 'esta ASC' : 'esta região'}.
                       </p>
                     )}
                   </>

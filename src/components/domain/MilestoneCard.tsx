@@ -4,7 +4,7 @@ import Card from '../ui/Card'
 import Badge from '../ui/Badge'
 import ProgressBar from '../ui/ProgressBar'
 
-interface MilestoneCardProps {
+interface IndicadorCardProps {
   title: string
   scopeLabel?: string
   plannedValue: number
@@ -30,7 +30,7 @@ const statusMap = {
   BLOCKED: { variant: 'danger' as const, label: 'Bloqueado' },
 }
 
-export default function MilestoneCard({ title, scopeLabel, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, onUpdate }: MilestoneCardProps) {
+export default function IndicadorCard({ title, scopeLabel, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, onUpdate }: IndicadorCardProps) {
   const pct = achievedValue !== undefined ? Math.min(100, (achievedValue / plannedValue) * 100) : 0
   const { variant, label } = statusMap[status]
 

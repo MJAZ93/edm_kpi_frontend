@@ -123,7 +123,7 @@ export default function CaDashboardPage() {
       {/* ── KPI stat cards ───────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         <StatCard
-          label="Total Projectos"
+          label="Total Pilares Estratégicos"
           value={summary?.total_projects ?? 0}
           icon={<FolderKanban size={17} />}
         />
@@ -134,7 +134,7 @@ export default function CaDashboardPage() {
           color="var(--color-traffic-yellow-bg)"
         />
         <StatCard
-          label="Milestones Concluídos"
+          label="Indicadores Concluídos"
           value={summary?.milestones_done ?? 0}
           icon={<CheckCircle2 size={17} />}
           color="var(--color-traffic-green-bg)"
@@ -225,19 +225,19 @@ export default function CaDashboardPage() {
         )}
       </Card>
 
-      {/* ── Projectos da Direcção seleccionada ───────────────────────────────── */}
+      {/* ── Pilares Estratégicos da Direcção seleccionada ───────────────────────────────── */}
       {selected && (
         <Card variant="elevated">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <FolderOpen size={15} style={{ color: 'var(--color-primary)' }} />
             <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Projectos — {selected.name}
+              Pilares Estratégicos — {selected.name}
             </p>
             <Badge variant="default" style={{ marginLeft: 4 }}>{dirProjects.length}</Badge>
           </div>
           {dirProjects.length === 0 ? (
             <p style={{ fontSize: 13, color: 'var(--color-text-muted)', padding: '12px 0' }}>
-              Sem projectos atribuídos a esta direcção.
+              Sem pilares estratégicos atribuídos a esta direcção.
             </p>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
@@ -342,7 +342,14 @@ export default function CaDashboardPage() {
               properties: f.properties,
             }))}
             height={440}
-            onSelect={() => navigate('/analytics/map')}
+            renderPopupContent={(_props, _close) => (
+              <button
+                onClick={() => navigate('/analytics/map')}
+                style={{ width: '100%', marginTop: 4, padding: '7px 0', borderRadius: 8, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+              >
+                Ver no mapa completo →
+              </button>
+            )}
           />
         ) : (
           <div style={{
@@ -509,10 +516,10 @@ export default function CaDashboardPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {[
                   { label: 'Direcções activas',       value: dirList.length,                    warn: false },
-                  { label: 'Milestones concluídos',    value: summary?.milestones_done ?? 0,     warn: false },
-                  { label: 'Milestones pendentes',     value: summary?.milestones_pending ?? 0,  warn: false },
-                  { label: 'Milestones bloqueados',    value: summary?.milestones_blocked ?? 0,  warn: true  },
-                  { label: 'Total tarefas',            value: summary?.total_tasks ?? 0,         warn: false },
+                  { label: 'Indicadores concluídos',    value: summary?.milestones_done ?? 0,     warn: false },
+                  { label: 'Indicadores pendentes',     value: summary?.milestones_pending ?? 0,  warn: false },
+                  { label: 'Indicadores bloqueados',    value: summary?.milestones_blocked ?? 0,  warn: true  },
+                  { label: 'Total acções',            value: summary?.total_tasks ?? 0,         warn: false },
                 ].map((row, i, arr) => (
                   <div
                     key={row.label}

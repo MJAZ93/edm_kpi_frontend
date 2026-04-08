@@ -213,7 +213,7 @@ export default function ScopeMap({ features, height = 380 }: Props) {
           {/* Tasks */}
           {selected.taskCount != null && (
             <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: selected.taskTitles?.length ? 6 : 0 }}>
-              <b style={{ color: 'var(--color-text)' }}>{selected.taskCount}</b> tarefa{selected.taskCount !== 1 ? 's' : ''} nesta área
+              <b style={{ color: 'var(--color-text)' }}>{selected.taskCount}</b> acção{selected.taskCount !== 1 ? 's' : ''} nesta área
             </p>
           )}
           {selected.taskTitles?.map((t, i) => (

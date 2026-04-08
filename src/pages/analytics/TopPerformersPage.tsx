@@ -99,7 +99,7 @@ export default function TopPerformersPage() {
               <div style={{ padding: '32px 0', textAlign: 'center' }}>
                 <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Sem dados de performance para este período.</p>
                 <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4, fontStyle: 'italic' }}>
-                  Certifique-se que existem tarefas e milestones registados.
+                  Certifique-se que existem acções e indicadores registados.
                 </p>
               </div>
             ) : (
@@ -365,7 +365,7 @@ function EmployeePanel({ employees, hideCategoryTabs = false }: { employees: Emp
                   <TrafficLight status={tl} showLabel={false} size="sm" />
                 </div>
 
-                {/* Row 2: progress bar + milestone badge */}
+                {/* Row 2: progress bar + indicador badge */}
                 <div style={{ paddingLeft: 42 }}>
                   <ProgressBar value={emp.total_score} variant="auto" height={4} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
@@ -381,7 +381,7 @@ function EmployeePanel({ employees, hideCategoryTabs = false }: { employees: Emp
                     {emp.ms_total > 0 && (
                       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
                         <CheckCircle2 size={10} style={{ color: 'var(--color-traffic-green)' }} />
-                        {emp.ms_done}/{emp.ms_total} milestones ({msPct.toFixed(0)}%)
+                        {emp.ms_done}/{emp.ms_total} indicadores ({msPct.toFixed(0)}%)
                       </span>
                     )}
                   </div>
@@ -446,13 +446,13 @@ function EmployeePanel({ employees, hideCategoryTabs = false }: { employees: Emp
                       ))}
                     </div>
 
-                    {/* Milestone summary */}
+                    {/* Indicador summary */}
                     <div>
                       <p style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                        Milestones
+                        Indicadores
                       </p>
                       {selected.ms_total === 0 ? (
-                        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>Sem milestones registados.</p>
+                        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>Sem indicadores registados.</p>
                       ) : (
                         <>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -487,7 +487,7 @@ function EmployeePanel({ employees, hideCategoryTabs = false }: { employees: Emp
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {[
                   { label: 'Total colaboradores', value: employees.length },
-                  { label: 'Com milestones',       value: withMs.length },
+                  { label: 'Com indicadores',       value: withMs.length },
                   { label: 'Média de score',        value: `${avg.toFixed(1)}` },
                   { label: 'Melhor performer',      value: employees[0]?.name ?? '—' },
                 ].map((row, i, arr) => (

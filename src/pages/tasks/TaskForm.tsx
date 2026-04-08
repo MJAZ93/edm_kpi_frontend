@@ -39,6 +39,7 @@ interface Props {
   projectId: number
   onSubmit: (payload: CreateTaskPayload) => void
   defaultValues?: Partial<FormValues>
+  initialScopes?: { scope_type: ScopeType; scope_id: number; name: string }[]
 }
 
 const FREQ_OPTS = [
@@ -72,7 +73,7 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function TaskForm({ id, projectId, onSubmit, defaultValues }: Props) {
+export default function TaskForm({ id, projectId, onSubmit, defaultValues, initialScopes = [] }: Props) {
   const { user } = useAuth()
   const isDirecao     = user?.role === 'DIRECAO'
   const isDepartamento = user?.role === 'DEPARTAMENTO'
@@ -90,12 +91,15 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues }: Pro
   })
 
   // Scopes
-  const [scopes, setScopes] = useState<{ scope_type: ScopeType; scope_id: number; name: string }[]>([])
+  const [scopes, setScopes] = useState<{ scope_type: ScopeType; scope_id: number; name: string }[]>(initialScopes)
   const [scopeType, setScopeType] = useState<ScopeType>('ASC')
   const [scopeId, setScopeId] = useState('')
 
   // Department picker state (for DIRECAO/DEPARTAMENTO users)
   const [selectedDeptId, setSelectedDeptId] = useState('')
+
+  // Owner picker state (for ADMIN / CA / PELOURO users)
+  const [selectedOwnerId, setSelectedOwnerId] = useState('')
 
   // Existing tasks → compute used weight
   const { data: existingTasksData } = useQuery({
@@ -109,14 +113,21 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues }: Pro
   const { data: ascs }    = useQuery({ queryKey: ['geo', 'ascs'],    queryFn: () => geoService.listAscs()    })
   const { data: regioes } = useQuery({ queryKey: ['geo', 'regioes'], queryFn: () => geoService.listRegioes() })
 
-  // Departments (for owner picker when user is DIRECAO)
+  // Departments
   const { data: deptsData } = useQuery({
     queryKey: ['departamentos'],
     queryFn:  () => orgService.listDepartamentos(),
-    enabled:  autoOwner,
   })
 
-  const depts = deptsData?.data ?? []
+  // Direcções
+  const { data: direoesData } = useQuery({
+    queryKey: ['direcoes'],
+    queryFn:  () => orgService.listDirecoes(),
+  })
+
+  const depts   = deptsData?.data   ?? []
+  const direcoes = direoesData?.data ?? []
+
   const deptOptions = [
     { value: '', label: 'Seleccionar departamento…' },
     ...depts.map(d => ({ value: String(d.id), label: d.name })),
@@ -126,6 +137,31 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues }: Pro
 
   const handleDeptChange = (val: string) => {
     setSelectedDeptId(val)
+    setValue('owner_id', Number(val))
+  }
+
+  // Owner options for admin — changes with owner_type
+  const ownerOptions = (type: string) => {
+    if (type === 'DIRECAO') {
+      return [
+        { value: '', label: 'Seleccionar direcção…' },
+        ...direcoes.map(d => ({ value: String(d.id), label: d.name })),
+      ]
+    }
+    return [
+      { value: '', label: 'Seleccionar departamento…' },
+      ...depts.map(d => ({ value: String(d.id), label: d.name })),
+    ]
+  }
+
+  const handleOwnerTypeChange = (val: string) => {
+    setValue('owner_type', val as any)
+    setSelectedOwnerId('')
+    setValue('owner_id', 0)
+  }
+
+  const handleOwnerIdChange = (val: string) => {
+    setSelectedOwnerId(val)
     setValue('owner_id', Number(val))
   }
 
@@ -166,7 +202,7 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues }: Pro
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <SectionHeader icon={<FileText size={13} style={{ color: 'var(--color-primary)' }} />} label="Identificação" />
         <Input label="Título" placeholder="Ex: Efectuar 50.000 inspecções" error={errors.title?.message} {...register('title')} />
-        <Textarea label="Descrição" placeholder="Detalhe o objectivo da tarefa…" rows={2} {...register('description')} />
+        <Textarea label="Descrição" placeholder="Detalhe o objectivo da acção…" rows={2} {...register('description')} />
       </div>
 
       {/* ── 2. Responsabilidade ───────────────────────────────────────────── */}
@@ -204,16 +240,27 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues }: Pro
             )}
           </>
         ) : (
-          /* ADMIN / outros — choose type + numeric ID */
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          /* ADMIN / outros — choose type + searchable combobox */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <Controller
               name="owner_type"
               control={control}
               render={({ field }) => (
-                <SearchableSelect label="Tipo de dono" options={ROLE_OPTS} value={field.value} onChange={field.onChange} />
+                <SearchableSelect
+                  label="Tipo de dono"
+                  options={ROLE_OPTS}
+                  value={field.value}
+                  onChange={val => { field.onChange(val); handleOwnerTypeChange(val) }}
+                />
               )}
             />
-            <Input label="ID do dono" type="number" error={errors.owner_id?.message} {...register('owner_id')} />
+            <SearchableSelect
+              label={ownerType === 'DIRECAO' ? 'Direcção' : 'Departamento'}
+              options={ownerOptions(ownerType)}
+              value={selectedOwnerId}
+              onChange={handleOwnerIdChange}
+              error={errors.owner_id?.message}
+            />
           </div>
         )}
       </div>

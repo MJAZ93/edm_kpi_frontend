@@ -10,6 +10,8 @@ export interface MapFeatureProps {
   id: number
   name: string
   total_score: number
+  execution_score?: number
+  goal_score?: number
   traffic_light: TrafficLight
 }
 
@@ -193,6 +195,26 @@ export default function PerformanceMap({ features, height = 400, onSelect, rende
             <div style={{ height: 5, borderRadius: 999, background: 'var(--color-border-strong)', marginBottom: 12, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: color, transition: 'width 400ms' }} />
             </div>
+
+            {/* Execution / Goal breakdown */}
+            {(p.execution_score != null || p.goal_score != null) && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                <div style={{ textAlign: 'center', padding: '8px 6px', background: 'var(--color-bg-strong)', borderRadius: 9 }}>
+                  <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 3 }}>Execução</p>
+                  <p style={{ fontSize: 18, fontWeight: 900, color: 'var(--color-text)', lineHeight: 1 }}>
+                    {(p.execution_score ?? 0).toFixed(1)}
+                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>%</span>
+                  </p>
+                </div>
+                <div style={{ textAlign: 'center', padding: '8px 6px', background: 'var(--color-bg-strong)', borderRadius: 9 }}>
+                  <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 3 }}>Objectivos</p>
+                  <p style={{ fontSize: 18, fontWeight: 900, color: 'var(--color-text)', lineHeight: 1 }}>
+                    {(p.goal_score ?? 0).toFixed(1)}
+                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>%</span>
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Custom content injected from parent */}
             {renderPopupContent?.(p, close)}

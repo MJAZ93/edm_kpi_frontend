@@ -13,6 +13,7 @@ import Input from '../../components/ui/Input'
 import Textarea from '../../components/ui/Textarea'
 import Select from '../../components/ui/Select'
 import Avatar from '../../components/ui/Avatar'
+import UserCombobox from '../../components/ui/UserCombobox'
 
 export default function OrgPage() {
   const { can } = useAuth()
@@ -21,14 +22,14 @@ export default function OrgPage() {
   const [modal, setModal] = useState<'pelouro' | 'direcao' | 'departamento' | null>(null)
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
-  const [respId, setRespId] = useState('')
+  const [respId, setRespId] = useState<number | null>(null)
   const [parentId, setParentId] = useState('')
 
   const { data: tree, isLoading } = useQuery({ queryKey: ['org', 'tree'], queryFn: orgService.getTree })
 
   const createPelouro = useMutation({
-    mutationFn: () => orgService.createPelouro({ name, description: desc, responsible_id: Number(respId) }),
-    onSuccess: () => { toast.success('Pelouro criado.'); qc.invalidateQueries({ queryKey: ['org'] }); setModal(null) },
+    mutationFn: () => orgService.createPelouro({ name, description: desc, responsible_id: respId ?? 0 }),
+    onSuccess: () => { toast.success('Pelouro criado.'); qc.invalidateQueries({ queryKey: ['org'] }); setModal(null); setRespId(null) },
     onError: () => toast.error('Erro.'),
   })
 
@@ -39,7 +40,7 @@ export default function OrgPage() {
   return (
     <div>
       <PageHeader eyebrow="Organização" title="Árvore Organizacional" subtitle="Estrutura hierárquica completa da empresa"
-        actions={can('create:pelouro') && <Button variant="primary" icon={<Plus size={14} />} onClick={() => { setModal('pelouro'); setName(''); setDesc(''); setRespId('') }}>Novo Pelouro</Button>}
+        actions={can('create:pelouro') && <Button variant="primary" icon={<Plus size={14} />} onClick={() => { setModal('pelouro'); setName(''); setDesc(''); setRespId(null) }}>Novo Pelouro</Button>}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -109,7 +110,7 @@ export default function OrgPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Input label="Nome" value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Redução de Perdas" />
           <Textarea label="Descrição" value={desc} onChange={e => setDesc(e.target.value)} rows={2} />
-          <Input label="ID do responsável" type="number" value={respId} onChange={e => setRespId(e.target.value)} />
+          <UserCombobox label="Responsável" value={respId} onChange={setRespId} roles={['CA', 'ADMIN']} />
         </div>
       </Modal>
     </div>

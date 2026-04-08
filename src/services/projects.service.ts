@@ -24,6 +24,9 @@ export const projectsService = {
   update: (id: number, payload: Partial<CreateProjectPayload>) =>
     api.put<Project>(`/private/projects/${id}`, payload).then(r => r.data),
 
+  updateProgress: (id: number, currentValue: number) =>
+    api.patch<Project>(`/private/projects/${id}/progress`, { current_value: currentValue }).then(r => r.data),
+
   remove: (id: number) =>
     api.delete(`/private/projects/${id}`).then(r => r.data),
 }

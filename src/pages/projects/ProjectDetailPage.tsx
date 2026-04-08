@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Calendar, CalendarCheck, Weight, ArrowUp, MapPin, Users, Tag, User, Activity, Building2, FolderOpen } from 'lucide-react'
+import { Plus, Trash2, Calendar, CalendarCheck, Weight, ArrowUp, MapPin, Users, Tag, User, Activity, Building2, FolderOpen, Pencil } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { projectsService } from '../../services/projects.service'
 import { tasksService } from '../../services/tasks.service'
@@ -24,7 +24,8 @@ import TaskCard from '../../components/domain/TaskCard'
 import PerformanceLineChart from '../../components/charts/PerformanceLineChart'
 import GanttChart from '../../components/charts/GanttChart'
 import TaskForm from '../tasks/TaskForm'
-import type { CreateTaskPayload, ScopeType } from '../../types'
+import ProjectForm from './ProjectForm'
+import type { CreateTaskPayload, CreateProjectPayload, ScopeType } from '../../types'
 
 const STATUS_BADGE: Record<string, 'orange' | 'success' | 'muted'> = {
   ACTIVE: 'orange', COMPLETED: 'success', CANCELLED: 'muted',
@@ -56,6 +57,9 @@ export default function ProjectDetailPage() {
   const qc = useQueryClient()
   const [taskModal, setTaskModal] = useState(false)
   const [deleteModal, setDeleteModal] = useState(false)
+  const [editModal, setEditModal] = useState(false)
+  const [editingProgress, setEditingProgress] = useState(false)
+  const [progressInput, setProgressInput] = useState('')
 
   const canAddTask = can('create:task') && user?.role !== 'CA' && user?.role !== 'PELOURO'
 
@@ -85,16 +89,39 @@ export default function ProjectDetailPage() {
   const createTask = useMutation({
     mutationFn: (payload: CreateTaskPayload) => tasksService.create(projectId, payload),
     onSuccess: () => {
-      toast.success('Tarefa criada.')
+      toast.success('Acção criada.')
       qc.invalidateQueries({ queryKey: ['tasks', { project_id: projectId }] })
       setTaskModal(false)
     },
-    onError: () => toast.error('Erro ao criar tarefa.'),
+    onError: () => toast.error('Erro ao criar acção.'),
   })
   const deleteProject = useMutation({
     mutationFn: () => projectsService.remove(projectId),
-    onSuccess: () => { toast.success('Projecto eliminado.'); navigate('/projects') },
-    onError: () => toast.error('Erro ao eliminar projecto.'),
+    onSuccess: () => { toast.success('Pilar Estratégico eliminado.'); navigate('/projects') },
+    onError: () => toast.error('Erro ao eliminar pilar estratégico.'),
+  })
+
+  const updateProject = useMutation({
+    mutationFn: (payload: Partial<CreateProjectPayload>) => projectsService.update(projectId, payload as any),
+    onSuccess: () => {
+      toast.success('Pilar Estratégico actualizado.')
+      qc.invalidateQueries({ queryKey: ['projects', projectId] })
+      qc.invalidateQueries({ queryKey: ['dashboard', 'direcao-overview'] })
+      setEditModal(false)
+    },
+    onError: () => toast.error('Erro ao actualizar pilar estratégico.'),
+  })
+
+  const saveProgress = useMutation({
+    mutationFn: (val: number) => projectsService.updateProgress(projectId, val),
+    onSuccess: () => {
+      toast.success('Progresso actualizado.')
+      qc.invalidateQueries({ queryKey: ['projects', projectId] })
+      qc.invalidateQueries({ queryKey: ['dashboard', 'direcao-overview'] })
+      setEditingProgress(false)
+      setProgressInput('')
+    },
+    onError: () => toast.error('Erro ao actualizar progresso.'),
   })
 
   const tasks = tasksData?.data ?? []
@@ -152,9 +179,9 @@ export default function ProjectDetailPage() {
   }, [tasks, ascMap, regiaoMap])
 
   // Must be before early returns
-  const milestoneQueries = useQueries({
+  const indicadorQueries = useQueries({
     queries: tasks.map(t => ({
-      queryKey: ['milestones', { task_id: t.id }],
+      queryKey: ['indicadores', { task_id: t.id }],
       queryFn: () => milestonesService.list(t.id),
       enabled: tasks.length > 0,
     })),
@@ -167,11 +194,11 @@ export default function ProjectDetailPage() {
     end_date: t.end_date,
     traffic_light: t.performance?.traffic_light as 'GREEN' | 'YELLOW' | 'RED' | undefined,
     owner_label: t.owner_name ?? t.owner_type,
-    milestones: milestoneQueries[i]?.data?.data ?? [],
-  })), [tasks, milestoneQueries])
+    indicadores: indicadorQueries[i]?.data?.data ?? [],
+  })), [tasks, indicadorQueries])
 
   if (isLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>
-  if (!project) return <div style={{ padding: 40, color: 'var(--color-text-muted)' }}>Projecto não encontrado.</div>
+  if (!project) return <div style={{ padding: 40, color: 'var(--color-text-muted)' }}>Pilar Estratégico não encontrado.</div>
 
   const perf = project.performance
   const ascScopes    = allScopes.filter(s => s.scope_type === 'ASC')
@@ -213,8 +240,123 @@ export default function ProjectDetailPage() {
   const TL_BG: Record<string, string> = { GREEN: 'var(--color-traffic-green-bg)', YELLOW: 'var(--color-traffic-yellow-bg)', RED: 'var(--color-traffic-red-bg)' }
   const TL_FG: Record<string, string> = { GREEN: 'var(--color-traffic-green)', YELLOW: 'var(--color-traffic-yellow)', RED: 'var(--color-traffic-red)' }
 
+  // ── Goal / KPI progress helpers ────────────────────────────────────────────
+  const hasGoal = !!(project?.goal_label || project?.target_value != null)
+  const goalStart   = project?.start_value   ?? 0
+  const goalTarget  = project?.target_value  ?? 0
+  const goalCurrent = project?.current_value ?? goalStart
+
+  // Direction of improvement: if target < start the goal is to decrease (e.g. losses 15% → 3%)
+  const improving = goalTarget <= goalStart
+  const totalRange = Math.abs(goalTarget - goalStart)
+  const progress   = totalRange > 0
+    ? Math.min(100, Math.max(0, (Math.abs(goalCurrent - goalStart) / totalRange) * 100))
+    : 0
+  const reached = improving ? goalCurrent <= goalTarget : goalCurrent >= goalTarget
+
+  const FREQ_LABEL: Record<string, string> = {
+    DAILY: 'Diária', WEEKLY: 'Semanal', MONTHLY: 'Mensal',
+    QUARTERLY: 'Trimestral', BIANNUAL: 'Semestral', ANNUAL: 'Anual',
+  }
+
   const OverviewCards = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* ── KPI / Objectivo progress card ── */}
+      {hasGoal && (
+        <Card variant="elevated" style={{ border: reached ? '2px solid var(--color-traffic-green)' : '2px solid var(--color-primary)44', background: reached ? 'var(--color-traffic-green-bg)' : 'var(--color-primary-bg)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: reached ? 'var(--color-traffic-green)' : 'var(--color-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Activity size={15} style={{ color: '#fff' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', marginBottom: 1 }}>
+                {project?.goal_label || 'Objectivo KPI'}
+              </p>
+              {project?.frequency && (
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                  Frequência: {FREQ_LABEL[project.frequency] ?? project.frequency}
+                </span>
+              )}
+            </div>
+            {reached && (
+              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-traffic-green)', background: 'var(--color-traffic-green-bg)', border: '1px solid var(--color-traffic-green)44', borderRadius: 8, padding: '3px 10px' }}>
+                ✓ Atingido
+              </span>
+            )}
+          </div>
+
+          {/* Numbers row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
+            <div style={{ textAlign: 'center', background: 'var(--color-bg)', borderRadius: 10, padding: '10px 8px' }}>
+              <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 4 }}>Inicial</p>
+              <p style={{ fontSize: 20, fontWeight: 900, color: 'var(--color-text-muted)', lineHeight: 1 }}>
+                {goalStart.toLocaleString('pt-MZ')}
+              </p>
+            </div>
+            <div style={{ textAlign: 'center', background: 'var(--color-bg)', borderRadius: 10, padding: '10px 8px', border: '2px solid var(--color-primary)' }}>
+              <p style={{ fontSize: 11, color: 'var(--color-primary)', fontWeight: 700, marginBottom: 4 }}>Actual</p>
+              <p style={{ fontSize: 24, fontWeight: 900, color: reached ? 'var(--color-traffic-green)' : 'var(--color-primary)', lineHeight: 1 }}>
+                {goalCurrent.toLocaleString('pt-MZ')}
+              </p>
+            </div>
+            <div style={{ textAlign: 'center', background: 'var(--color-bg)', borderRadius: 10, padding: '10px 8px' }}>
+              <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 4 }}>Meta</p>
+              <p style={{ fontSize: 20, fontWeight: 900, color: 'var(--color-text)', lineHeight: 1 }}>
+                {goalTarget.toLocaleString('pt-MZ')}
+              </p>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>Progresso em direcção à meta</span>
+              <span style={{ fontSize: 13, fontWeight: 900, color: reached ? 'var(--color-traffic-green)' : 'var(--color-primary)' }}>{progress.toFixed(1)}%</span>
+            </div>
+            <div style={{ height: 10, borderRadius: 999, background: 'var(--color-border)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progress}%`, borderRadius: 999, background: reached ? 'var(--color-traffic-green)' : 'var(--color-primary)', transition: 'width 600ms' }} />
+            </div>
+          </div>
+
+          {/* Inline update */}
+          {can('update:project') && (
+            editingProgress ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="number"
+                  step="any"
+                  value={progressInput}
+                  onChange={e => setProgressInput(e.target.value)}
+                  placeholder={`Valor actual (era ${goalCurrent})`}
+                  style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1.5px solid var(--color-primary)', background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: 14, fontWeight: 700, outline: 'none' }}
+                  autoFocus
+                />
+                <button
+                  disabled={progressInput === '' || saveProgress.isPending}
+                  onClick={() => saveProgress.mutate(parseFloat(progressInput))}
+                  style={{ padding: '8px 20px', borderRadius: 8, background: progressInput !== '' ? 'var(--color-primary)' : 'var(--color-border)', color: progressInput !== '' ? '#fff' : 'var(--color-text-muted)', border: 'none', cursor: progressInput !== '' ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 800, flexShrink: 0 }}
+                >
+                  {saveProgress.isPending ? '…' : 'Guardar'}
+                </button>
+                <button
+                  onClick={() => { setEditingProgress(false); setProgressInput('') }}
+                  style={{ padding: '8px 12px', borderRadius: 8, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 13, flexShrink: 0 }}
+                >✕</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setEditingProgress(true); setProgressInput(String(goalCurrent)) }}
+                style={{ width: '100%', padding: '9px 0', borderRadius: 8, background: 'var(--color-bg)', border: '1.5px solid var(--color-primary)44', color: 'var(--color-primary)', cursor: 'pointer', fontSize: 13, fontWeight: 800 }}
+                onMouseEnter={e => { (e.currentTarget.style.background = 'var(--color-primary)'); (e.currentTarget.style.color = '#fff') }}
+                onMouseLeave={e => { (e.currentTarget.style.background = 'var(--color-bg)'); (e.currentTarget.style.color = 'var(--color-primary)') }}
+              >
+                ✏ Actualizar valor actual
+              </button>
+            )
+          )}
+        </Card>
+      )}
 
       {/* ── Performance banner (full width, only when data exists) ── */}
       {perf && (
@@ -240,7 +382,7 @@ export default function ProjectDetailPage() {
 
       {/* ── Details card — full width, icon grid ── */}
       <Card variant="elevated">
-        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 20 }}>Detalhes do Projecto</p>
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 20 }}>Detalhes do Pilar Estratégico</p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
           {/* Tipo */}
@@ -287,7 +429,7 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* Peso — só quando tem projecto pai */}
+          {/* Peso — só quando tem pilar estratégico pai */}
           {project.parent_id && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', background: 'var(--color-bg-strong)', borderRadius: 14 }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--color-primary-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -311,14 +453,14 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* Projecto pai (optional) */}
+          {/* Pilar Estratégico pai (optional) */}
           {project.parent && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', background: 'var(--color-bg-strong)', borderRadius: 14 }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--color-primary-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <FolderOpen size={16} style={{ color: 'var(--color-primary)' }} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Projecto pai</p>
+                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Pilar Estratégico pai</p>
                 <button onClick={() => navigate(`/projects/${project.parent!.id}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: 13, fontWeight: 700, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
                   <ArrowUp size={11} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.parent.title}</span>
@@ -349,7 +491,7 @@ export default function ProjectDetailPage() {
           <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipa & Responsáveis</p>
         </div>
         {uniqueOwners.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', padding: '12px 0' }}>Nenhuma tarefa com responsável atribuído.</p>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', padding: '12px 0' }}>Nenhuma acção com responsável atribuído.</p>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
             {uniqueOwners.map(owner => {
@@ -393,10 +535,10 @@ export default function ProjectDetailPage() {
         )}
       </Card>
 
-      {/* ── Sub-projectos ── */}
+      {/* ── Sub-pilares ── */}
       {subProjects.length > 0 && (
         <Card variant="elevated">
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>Sub-projectos ({subProjects.length})</p>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>Sub-pilares ({subProjects.length})</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {subProjects.map(sp => (
               <div key={sp.id} onClick={() => navigate(`/projects/${sp.id}`)}
@@ -424,12 +566,12 @@ export default function ProjectDetailPage() {
     <div>
       {canAddTask && (
         <div style={{ marginBottom: 20 }}>
-          <Button variant="primary" icon={<Plus size={14} />} onClick={() => setTaskModal(true)}>Nova Tarefa</Button>
+          <Button variant="primary" icon={<Plus size={14} />} onClick={() => setTaskModal(true)}>Nova Acção</Button>
         </div>
       )}
       {tasks.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--color-text-muted)' }}>
-          <p style={{ fontSize: 14 }}>Nenhuma tarefa criada ainda.</p>
+          <p style={{ fontSize: 14 }}>Nenhuma acção criada ainda.</p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
@@ -442,7 +584,7 @@ export default function ProjectDetailPage() {
               startValue={t.start_value}
               currentValue={t.current_value}
               targetValue={t.target_value}
-              milestonesTotal={0}
+              indicadoresTotal={0}
               milesDone={0}
               trafficLight={(t.performance?.traffic_light ?? 'YELLOW') as 'GREEN' | 'YELLOW' | 'RED'}
               ownerLabel={t.owner_name ?? t.owner_type}
@@ -457,10 +599,10 @@ export default function ProjectDetailPage() {
   const GanttSection = (
     <Card variant="elevated">
       <div style={{ marginBottom: 20 }}>
-        <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text)', marginBottom: 4 }}>Cronograma do Projecto</p>
+        <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--color-text)', marginBottom: 4 }}>Cronograma do Pilar Estratégico</p>
         <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
           {fmtDate(project.start_date)} → {fmtDate(project.end_date)}
-          {' · '}{tasks.length} {tasks.length === 1 ? 'tarefa' : 'tarefas'}
+          {' · '}{tasks.length} {tasks.length === 1 ? 'acção' : 'acções'}
         </p>
       </div>
       <GanttChart
@@ -481,7 +623,7 @@ export default function ProjectDetailPage() {
         </div>
 
         {allScopes.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', padding: '12px 0' }}>Nenhum âmbito geográfico definido nas tarefas.</p>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', padding: '12px 0' }}>Nenhum âmbito geográfico definido nas acções.</p>
         ) : isNacional ? (
           <Badge variant="success" style={{ marginBottom: 12 }}>Âmbito Nacional</Badge>
         ) : scopeMapFeatures.length > 0 ? (
@@ -532,7 +674,7 @@ export default function ProjectDetailPage() {
       </Card>
       {tasksWithScopes.length > 0 && (
         <Card variant="elevated">
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>Âmbito por Tarefa</p>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>Âmbito por Acção</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {tasksWithScopes.map(task => (
               <div key={task.id} style={{ padding: '12px 14px', background: 'var(--color-bg-strong)', borderRadius: 12 }}>
@@ -577,13 +719,13 @@ export default function ProjectDetailPage() {
         eyebrow={
           project.parent ? (
             <span>
-              <span onClick={() => navigate('/projects')} style={{ cursor: 'pointer', color: 'var(--color-primary)' }}>Projectos</span>
+              <span onClick={() => navigate('/projects')} style={{ cursor: 'pointer', color: 'var(--color-primary)' }}>Pilares Estratégicos</span>
               {' / '}
               <span onClick={() => navigate(`/projects/${project.parent!.id}`)} style={{ cursor: 'pointer', color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <ArrowUp size={11} />{project.parent.title}
               </span>
             </span>
-          ) : 'Projectos'
+          ) : 'Pilares Estratégicos'
         }
         title={project.title}
         subtitle={project.description}
@@ -597,6 +739,9 @@ export default function ProjectDetailPage() {
         }
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
+            {can('update:project') && (
+              <Button variant="secondary" size="sm" icon={<Pencil size={13} />} onClick={() => setEditModal(true)}>Editar</Button>
+            )}
             {can('create:project') && (
               <Button variant="danger" size="sm" icon={<Trash2 size={13} />} onClick={() => setDeleteModal(true)}>Eliminar</Button>
             )}
@@ -606,7 +751,7 @@ export default function ProjectDetailPage() {
 
       <Tabs tabs={[
         { key: 'overview',  label: 'Visão Geral' },
-        { key: 'tasks',     label: `Tarefas (${tasks.length})` },
+        { key: 'tasks',     label: `Acções (${tasks.length})` },
         { key: 'gantt',     label: 'Cronograma' },
         { key: 'scope',     label: 'Âmbito & Mapa' },
         { key: 'progress',  label: 'Progresso' },
@@ -617,7 +762,7 @@ export default function ProjectDetailPage() {
               {OverviewCards}
               <div>
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>
-                  Tarefas ({tasks.length})
+                  Acções ({tasks.length})
                 </p>
                 {TasksSection}
               </div>
@@ -651,18 +796,47 @@ export default function ProjectDetailPage() {
         }}
       </Tabs>
 
-      <Modal open={taskModal} onClose={() => setTaskModal(false)} title="Nova Tarefa" width={600}
+      <Modal open={editModal} onClose={() => setEditModal(false)} title="Editar Pilar Estratégico" width={600}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditModal(false)}>Cancelar</Button>
+            <Button variant="primary" form="edit-project-form" type="submit" loading={updateProject.isPending} icon={<Pencil size={14} />}>Guardar</Button>
+          </>
+        }
+      >
+        <ProjectForm
+          id="edit-project-form"
+          editMode
+          defaultValues={{
+            title:        project.title,
+            description:  project.description ?? '',
+            creator_type: project.creator_type as any,
+            weight:       project.weight,
+            start_date:   project.start_date?.split('T')[0] ?? '',
+            end_date:     project.end_date?.split('T')[0] ?? '',
+            parent_id:    project.parent_id ? String(project.parent_id) : '',
+            status:       project.status,
+            goal_label:   project.goal_label ?? '',
+            frequency:    project.frequency ?? '',
+            start_value:  project.start_value,
+            target_value: project.target_value,
+          }}
+          onSubmit={payload => updateProject.mutate(payload)}
+        />
+      </Modal>
+
+      <Modal open={taskModal} onClose={() => setTaskModal(false)} title="Nova Acção" width={600}
         footer={
           <>
             <Button variant="secondary" onClick={() => setTaskModal(false)}>Cancelar</Button>
-            <Button variant="primary" form="task-form" type="submit" loading={createTask.isPending} icon={<Plus size={14} />}>Criar Tarefa</Button>
+            <Button variant="primary" form="task-form" type="submit" loading={createTask.isPending} icon={<Plus size={14} />}>Criar Acção</Button>
           </>
         }
       >
         <TaskForm id="task-form" projectId={projectId} onSubmit={payload => createTask.mutate(payload)} />
       </Modal>
 
-      <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title="Eliminar projecto"
+      <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title="Eliminar pilar estratégico"
         footer={
           <>
             <Button variant="secondary" onClick={() => setDeleteModal(false)}>Cancelar</Button>

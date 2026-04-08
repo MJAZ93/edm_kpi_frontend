@@ -22,7 +22,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { key: 'dashboard',     label: 'Dashboard',      icon: <LayoutDashboard size={17} />, path: '/dashboard' },
-  { key: 'projects',      label: 'Projectos',      icon: <FolderKanban size={17} />,    path: '/projects' },
+  { key: 'projects',      label: 'Pilares Estratégicos',      icon: <FolderKanban size={17} />,    path: '/projects' },
   {
     key: 'analytics', label: 'Relatórios', icon: <BarChart3 size={17} />,
     children: [

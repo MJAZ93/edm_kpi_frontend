@@ -1,16 +1,9 @@
 import React, { useState, useCallback } from 'react'
-import { MapContainer, TileLayer, Polygon, Marker, useMapEvents } from 'react-leaflet'
-import L from 'leaflet'
+import { MapContainer, TileLayer, Polygon, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import Button from '../ui/Button'
 import Textarea from '../ui/Textarea'
 import Tabs from '../ui/Tabs'
-
-// Fix default marker icons
-import iconUrl from 'leaflet/dist/images/marker-icon.png'
-import iconShadow from 'leaflet/dist/images/marker-shadow.png'
-const DefaultIcon = L.icon({ iconUrl, shadowUrl: iconShadow, iconAnchor: [12, 41] })
-L.Marker.prototype.options.icon = DefaultIcon
 
 type LatLng = [number, number]
 
@@ -113,14 +106,11 @@ export default function PolygonEditor({ value, onChange }: Props) {
                 {points.length >= 3 && (
                   <Polygon positions={points} pathOptions={{ color: '#e8670a', fillOpacity: 0.2 }} />
                 )}
-                {points.map((p, i) => (
-                  <Marker key={i} position={p} eventHandlers={{ click: () => removePoint(i) }} />
-                ))}
               </MapContainer>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                {points.length} ponto{points.length !== 1 ? 's' : ''} {points.length > 0 ? '(clique num marcador para o remover)' : ''}
+                {points.length} ponto{points.length !== 1 ? 's' : ''}
               </span>
               {points.length > 0 && (
                 <Button variant="secondary" size="sm" onClick={clearAll}>Limpar</Button>

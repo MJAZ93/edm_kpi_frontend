@@ -127,6 +127,12 @@ export interface Project {
   direcoes?: Direcao[]
   created_at?: string
   updated_at?: string
+  // KPI objective tracking
+  goal_label?: string
+  frequency?: string
+  start_value?: number
+  target_value?: number
+  current_value?: number
 }
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
@@ -441,6 +447,12 @@ export interface CreateProjectPayload {
   start_date: string
   end_date: string
   direcao_ids?: number[]
+  status?: string
+  goal_label?: string
+  frequency?: string
+  start_value?: number
+  target_value?: number
+  current_value?: number
 }
 
 export interface CreateTaskPayload {
