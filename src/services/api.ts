@@ -32,6 +32,10 @@ function normalizeKeys(obj: unknown): unknown {
   return obj
 }
 
+function isPrivateApiRequest(url?: string): boolean {
+  return !!url && url.includes('/private/')
+}
+
 // Inject token on every request
 api.interceptors.request.use((config) => {
   const raw = localStorage.getItem('commv_auth')
@@ -52,7 +56,9 @@ api.interceptors.response.use(
     return res
   },
   (err) => {
-    if (err.response?.status === 401) {
+    const requestUrl = err.config?.url as string | undefined
+
+    if (err.response?.status === 401 && isPrivateApiRequest(requestUrl)) {
       localStorage.removeItem('commv_auth')
       window.location.href = '/login'
     }

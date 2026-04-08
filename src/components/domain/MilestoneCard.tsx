@@ -1,5 +1,5 @@
 import React from 'react'
-import { Calendar, MapPin, Camera, AlertOctagon } from 'lucide-react'
+import { Calendar, MapPin, Camera, AlertOctagon, User, Pencil } from 'lucide-react'
 import Card from '../ui/Card'
 import Badge from '../ui/Badge'
 import ProgressBar from '../ui/ProgressBar'
@@ -15,7 +15,9 @@ interface IndicadorCardProps {
   hasPhoto?: boolean
   hasBlocker?: boolean
   notes?: string
+  assigneeName?: string
   onUpdate?: () => void
+  onEdit?: () => void
 }
 
 function fmtDate(d?: string) {
@@ -30,7 +32,7 @@ const statusMap = {
   BLOCKED: { variant: 'danger' as const, label: 'Bloqueado' },
 }
 
-export default function IndicadorCard({ title, scopeLabel, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, onUpdate }: IndicadorCardProps) {
+export default function IndicadorCard({ title, scopeLabel, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, assigneeName, onUpdate, onEdit }: IndicadorCardProps) {
   const pct = achievedValue !== undefined ? Math.min(100, (achievedValue / plannedValue) * 100) : 0
   const { variant, label } = statusMap[status]
 
@@ -44,6 +46,7 @@ export default function IndicadorCard({ title, scopeLabel, plannedValue, achieve
             {scopeLabel && <Badge variant="info"><MapPin size={10} style={{ marginRight: 2 }} />{scopeLabel}</Badge>}
             {hasBlocker && <Badge variant="danger"><AlertOctagon size={10} style={{ marginRight: 2 }} />Impedimento</Badge>}
             {hasPhoto && <Badge variant="muted"><Camera size={10} style={{ marginRight: 2 }} />Foto</Badge>}
+            {assigneeName && <Badge variant="default"><User size={10} style={{ marginRight: 2 }} />{assigneeName}</Badge>}
           </div>
         </div>
       </div>
@@ -61,11 +64,19 @@ export default function IndicadorCard({ title, scopeLabel, plannedValue, achieve
           <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Calendar size={10} />{fmtDate(plannedDate)}</span>
           {achievedDate && <span>→ {fmtDate(achievedDate)}</span>}
         </div>
-        {onUpdate && status !== 'DONE' && (
-          <button onClick={onUpdate} style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-primary)', background: 'var(--color-primary-soft)', border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>
-            Actualizar
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {onEdit && (
+            <button onClick={onEdit} style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)', background: 'var(--color-surface-muted)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Pencil size={11} />
+              Editar
+            </button>
+          )}
+          {onUpdate && status !== 'DONE' && (
+            <button onClick={onUpdate} style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-primary)', background: 'var(--color-primary-soft)', border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer' }}>
+              Progresso
+            </button>
+          )}
+        </div>
       </div>
 
       {notes && <p style={{ marginTop: 8, fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>{notes}</p>}

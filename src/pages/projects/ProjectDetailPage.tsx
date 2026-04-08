@@ -152,6 +152,11 @@ export default function ProjectDetailPage() {
     return m
   }, [direcoesData])
 
+  const taskOwnerLabel = (task: typeof tasks[number]) => {
+    const base = task.owner_name ?? task.owner_type
+    return task.assignee?.name ? `${base} · ${task.assignee.name}` : base
+  }
+
   const uniqueOwners = useMemo(() => {
     const seen = new Set<string>()
     const owners: { key: string; owner_type: string; owner_id: number; name?: string }[] = []
@@ -193,7 +198,7 @@ export default function ProjectDetailPage() {
     start_date: t.start_date,
     end_date: t.end_date,
     traffic_light: t.performance?.traffic_light as 'GREEN' | 'YELLOW' | 'RED' | undefined,
-    owner_label: t.owner_name ?? t.owner_type,
+    owner_label: taskOwnerLabel(t),
     indicadores: indicadorQueries[i]?.data?.data ?? [],
   })), [tasks, indicadorQueries])
 
@@ -587,7 +592,7 @@ export default function ProjectDetailPage() {
               indicadoresTotal={0}
               milesDone={0}
               trafficLight={(t.performance?.traffic_light ?? 'YELLOW') as 'GREEN' | 'YELLOW' | 'RED'}
-              ownerLabel={t.owner_name ?? t.owner_type}
+              ownerLabel={taskOwnerLabel(t)}
               onClick={() => navigate(`/tasks/${t.id}`)}
             />
           ))}

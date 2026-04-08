@@ -151,6 +151,8 @@ export interface Task {
   owner_type: Role
   owner_id: number
   owner_name?: string
+  assigned_to?: number
+  assignee?: User
   frequency: Frequency
   goal_label: string
   start_value: number
@@ -183,6 +185,8 @@ export interface Milestone {
   status: MilestoneStatus
   notes?: string
   photo_url?: string
+  assigned_to?: number
+  assignee?: User
   created_at?: string
   updated_at?: string
 }
@@ -460,6 +464,7 @@ export interface CreateTaskPayload {
   description?: string
   owner_type: Role
   owner_id: number
+  assigned_to?: number
   frequency: Frequency
   goal_label: string
   start_value: number
@@ -483,10 +488,17 @@ export interface CreateMilestonePayload {
 }
 
 export interface UpdateMilestonePayload {
-  achieved_value: number
-  achieved_date: string
-  status: MilestoneStatus
+  achieved_value?: number
+  achieved_date?: string
+  status?: MilestoneStatus
   notes?: string
+  title?: string
+  description?: string
+  scope_type?: ScopeType
+  scope_id?: number
+  planned_value?: number
+  planned_date?: string
+  assigned_to?: number
 }
 
 export interface CreateBlockerPayload {

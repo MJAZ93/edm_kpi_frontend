@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -38,7 +38,7 @@ interface Props {
   id: string
   projectId: number
   onSubmit: (payload: CreateTaskPayload) => void
-  defaultValues?: Partial<FormValues>
+  defaultValues?: Partial<FormValues & { assigned_to?: number }>
   initialScopes?: { scope_type: ScopeType; scope_id: number; name: string }[]
 }
 
@@ -75,9 +75,12 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function TaskForm({ id, projectId, onSubmit, defaultValues, initialScopes = [] }: Props) {
   const { user } = useAuth()
+  const isAdmin       = user?.role === 'ADMIN'
   const isDirecao     = user?.role === 'DIRECAO'
   const isDepartamento = user?.role === 'DEPARTAMENTO'
   const autoOwner     = isDirecao || isDepartamento
+  const initialOwnerId = defaultValues?.owner_id ? String(defaultValues.owner_id) : ''
+  const initialAssignedTo = defaultValues?.assigned_to ? String(defaultValues.assigned_to) : ''
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema) as any,
@@ -96,10 +99,13 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
   const [scopeId, setScopeId] = useState('')
 
   // Department picker state (for DIRECAO/DEPARTAMENTO users)
-  const [selectedDeptId, setSelectedDeptId] = useState('')
+  const [selectedDeptId, setSelectedDeptId] = useState(autoOwner ? initialOwnerId : '')
 
   // Owner picker state (for ADMIN / CA / PELOURO users)
-  const [selectedOwnerId, setSelectedOwnerId] = useState('')
+  const [selectedOwnerId, setSelectedOwnerId] = useState(autoOwner ? '' : initialOwnerId)
+
+  // Task responsible user (for ADMIN / DIRECAO when the owner is a department)
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState(initialAssignedTo)
 
   // Existing tasks → compute used weight
   const { data: existingTasksData } = useQuery({
@@ -127,17 +133,68 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
 
   const depts   = deptsData?.data   ?? []
   const direcoes = direoesData?.data ?? []
+  const ownerType = watch('owner_type')
+  const selectedDepartmentId = autoOwner ? selectedDeptId : ownerType === 'DEPARTAMENTO' ? selectedOwnerId : ''
 
   const deptOptions = [
     { value: '', label: 'Seleccionar departamento…' },
     ...depts.map(d => ({ value: String(d.id), label: d.name })),
   ]
 
-  const selectedDept = depts.find(d => String(d.id) === selectedDeptId) ?? null
+  const selectedDept = depts.find(d => String(d.id) === selectedDepartmentId) ?? null
+
+  const { data: selectedDeptData, isFetching: isDeptUsersLoading } = useQuery({
+    queryKey: ['departamentos', selectedDepartmentId, 'detail'],
+    queryFn: () => orgService.getDepartamento(Number(selectedDepartmentId)),
+    enabled: !!selectedDepartmentId,
+  })
+
+  const departmentUsers = useMemo(() => {
+    const users = selectedDeptData?.users ?? []
+    const responsible = selectedDeptData?.responsible
+    const seen = new Set<number>()
+    const result: { id: number; name: string }[] = []
+
+    if (responsible && !seen.has(responsible.id)) {
+      seen.add(responsible.id)
+      result.push({ id: responsible.id, name: responsible.name })
+    }
+    users.forEach((u) => {
+      if (!seen.has(u.id)) {
+        seen.add(u.id)
+        result.push({ id: u.id, name: u.name })
+      }
+    })
+
+    return result
+  }, [selectedDeptData])
+
+  const canPickTaskResponsible = (isAdmin || isDirecao) && !!selectedDepartmentId
+  const assigneeOptions = [
+    { value: '', label: isDeptUsersLoading ? 'A carregar utilizadores…' : 'Seleccionar responsável…' },
+    ...departmentUsers.map((u) => ({ value: String(u.id), label: u.name })),
+  ]
+
+  useEffect(() => {
+    if (!selectedDepartmentId) {
+      setSelectedAssigneeId('')
+      return
+    }
+    if (selectedAssigneeId && !departmentUsers.some((u) => String(u.id) === selectedAssigneeId)) {
+      setSelectedAssigneeId('')
+    }
+  }, [departmentUsers, selectedAssigneeId, selectedDepartmentId])
+
+  useEffect(() => {
+    if (!canPickTaskResponsible || ownerType !== 'DEPARTAMENTO') {
+      setSelectedAssigneeId('')
+    }
+  }, [canPickTaskResponsible, ownerType])
 
   const handleDeptChange = (val: string) => {
     setSelectedDeptId(val)
     setValue('owner_id', Number(val))
+    setSelectedAssigneeId('')
   }
 
   // Owner options for admin — changes with owner_type
@@ -158,11 +215,13 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
     setValue('owner_type', val as any)
     setSelectedOwnerId('')
     setValue('owner_id', 0)
+    setSelectedAssigneeId('')
   }
 
   const handleOwnerIdChange = (val: string) => {
     setSelectedOwnerId(val)
     setValue('owner_id', Number(val))
+    setSelectedAssigneeId('')
   }
 
   // Scope options
@@ -190,10 +249,12 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
   const removeScope = (i: number) => setScopes(s => s.filter((_, idx) => idx !== i))
 
   const submit = (v: FormValues) => {
-    onSubmit({ ...v, scopes: scopes.map(({ scope_type, scope_id }) => ({ scope_type, scope_id })) })
+    onSubmit({
+      ...v,
+      assigned_to: selectedAssigneeId ? Number(selectedAssigneeId) : undefined,
+      scopes: scopes.map(({ scope_type, scope_id }) => ({ scope_type, scope_id })),
+    })
   }
-
-  const ownerType = watch('owner_type')
 
   return (
     <form id={id} onSubmit={handleSubmit(submit)} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -238,6 +299,23 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
                 )}
               </div>
             )}
+
+            {canPickTaskResponsible && (
+              <SearchableSelect
+                label="Utilizador responsável"
+                options={assigneeOptions}
+                value={selectedAssigneeId}
+                onChange={setSelectedAssigneeId}
+                disabled={!selectedDepartmentId || isDeptUsersLoading || departmentUsers.length === 0}
+                hint={
+                  !selectedDepartmentId
+                    ? 'Seleccione primeiro um departamento.'
+                    : departmentUsers.length === 0
+                      ? 'Este departamento ainda não tem utilizadores associados.'
+                      : 'Apenas utilizadores do departamento seleccionado.'
+                }
+              />
+            )}
           </>
         ) : (
           /* ADMIN / outros — choose type + searchable combobox */
@@ -261,6 +339,22 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
               onChange={handleOwnerIdChange}
               error={errors.owner_id?.message}
             />
+            {canPickTaskResponsible && ownerType === 'DEPARTAMENTO' && (
+              <SearchableSelect
+                label="Utilizador responsável"
+                options={assigneeOptions}
+                value={selectedAssigneeId}
+                onChange={setSelectedAssigneeId}
+                disabled={!selectedDepartmentId || isDeptUsersLoading || departmentUsers.length === 0}
+                hint={
+                  !selectedDepartmentId
+                    ? 'Seleccione primeiro um departamento.'
+                    : departmentUsers.length === 0
+                      ? 'Este departamento ainda não tem utilizadores associados.'
+                      : 'Apenas utilizadores do departamento seleccionado.'
+                }
+              />
+            )}
           </div>
         )}
       </div>

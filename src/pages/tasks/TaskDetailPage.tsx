@@ -1,13 +1,14 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, MapPin, Target, Pencil } from 'lucide-react'
+import { Plus, FileText, MapPin, Target, Pencil, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { tasksService } from '../../services/tasks.service'
 import { milestonesService } from '../../services/milestones.service'
 import { blockersService } from '../../services/blockers.service'
 import { dashboardService } from '../../services/dashboard.service'
 import { geoService } from '../../services/geo.service'
+import { orgService } from '../../services/org.service'
 import { useAuth } from '../../hooks/useAuth'
 import PageHeader from '../../components/layout/PageHeader'
 import Badge from '../../components/ui/Badge'
@@ -255,12 +256,13 @@ function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const taskId = Number(id)
-  const { can, user, isDepartamento } = useAuth()
+  const { can, user } = useAuth()
   const qc = useQueryClient()
 
   const [editModal, setEditModal] = useState(false)
   const [indicadorModal, setIndicadorModal] = useState(false)
-  const [updateMs, setUpdateMs] = useState<any | null>(null)
+  const [progressMs, setProgressMs] = useState<any | null>(null)
+  const [editingMilestone, setEditingMilestone] = useState<any | null>(null)
   const [blockerModal, setBlockerModal] = useState<number | null>(null)
   const [rejectModal, setRejectModal] = useState<number | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -306,13 +308,29 @@ export default function TaskDetailPage() {
   const { data: ascsData }    = useQuery({ queryKey: ['geo', 'ascs'],    queryFn: () => geoService.listAscs()    })
   const { data: regioesData } = useQuery({ queryKey: ['geo', 'regioes'], queryFn: () => geoService.listRegioes() })
 
-  // Dept users — only for DEPARTAMENTO role (to assign indicadores to technicians)
-  const { data: deptOverview } = useQuery({
-    queryKey: ['dashboard', 'departamento-overview'],
-    queryFn: dashboardService.getDepartamentoOverview,
-    enabled: isDepartamento(),
+  const { data: taskOwnerDept } = useQuery({
+    queryKey: ['departamentos', task?.owner_id, 'task-owner'],
+    queryFn: () => orgService.getDepartamento(task!.owner_id),
+    enabled: !!task && task.owner_type === 'DEPARTAMENTO',
   })
-  const deptUsers: { id: number; name: string }[] = isDepartamento() ? (deptOverview?.users ?? []) : []
+  const deptUsers = useMemo(() => {
+    const seen = new Set<number>()
+    const users: { id: number; name: string }[] = []
+    const responsible = taskOwnerDept?.responsible
+
+    if (responsible && !seen.has(responsible.id)) {
+      seen.add(responsible.id)
+      users.push({ id: responsible.id, name: responsible.name })
+    }
+    ;(taskOwnerDept?.users ?? []).forEach((u) => {
+      if (!seen.has(u.id)) {
+        seen.add(u.id)
+        users.push({ id: u.id, name: u.name })
+      }
+    })
+
+    return users
+  }, [taskOwnerDept])
 
   const updateTask = useMutation({
     mutationFn: (payload: Partial<CreateTaskPayload>) => tasksService.update(taskId, payload),
@@ -324,6 +342,17 @@ export default function TaskDetailPage() {
     mutationFn: (p: CreateMilestonePayload) => milestonesService.create(taskId, p),
     onSuccess: () => { toast.success('Indicador criado.'); qc.invalidateQueries({ queryKey: ['indicadores'] }); setIndicadorModal(false) },
     onError: () => toast.error('Erro ao criar indicador.'),
+  })
+
+  const updateMilestone = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<CreateMilestonePayload> }) => milestonesService.update(id, payload),
+    onSuccess: () => {
+      toast.success('Indicador actualizado.')
+      qc.invalidateQueries({ queryKey: ['indicadores'] })
+      qc.invalidateQueries({ queryKey: ['tasks', taskId] })
+      setEditingMilestone(null)
+    },
+    onError: () => toast.error('Erro ao actualizar indicador.'),
   })
 
   const createBlocker = useMutation({
@@ -357,6 +386,32 @@ export default function TaskDetailPage() {
   const totalPlanned = indicadores.reduce((sum: number, m: any) => sum + (m.planned_value ?? 0), 0)
   const unassigned = Math.max(0, targetVal - totalPlanned)
 
+  const resetMilestoneForm = () => {
+    setMsTitle('')
+    setMsScopeType('')
+    setMsScopeId('')
+    setMsPlanned('')
+    setMsDate('')
+    setMsNotes('')
+    setMsAssignedTo('')
+  }
+
+  const openCreateMilestone = () => {
+    resetMilestoneForm()
+    setIndicadorModal(true)
+  }
+
+  const openEditMilestone = (ms: any) => {
+    setMsTitle(ms.title ?? '')
+    setMsScopeType(ms.scope_type === 'REGIONAL' ? 'REGIAO' : (ms.scope_type ?? ''))
+    setMsScopeId(ms.scope_id ? String(ms.scope_id) : '')
+    setMsPlanned(String(ms.planned_value ?? ''))
+    setMsDate(ms.planned_date ? String(ms.planned_date).slice(0, 10) : '')
+    setMsNotes(ms.notes ?? '')
+    setMsAssignedTo(ms.assigned_to ? String(ms.assigned_to) : '')
+    setEditingMilestone(ms)
+  }
+
   // Resolve scope label from loaded geo data
   const scopeLabelFor = (m: any): string | undefined => {
     if (!m.scope_type || !m.scope_id) return undefined
@@ -388,6 +443,23 @@ export default function TaskDetailPage() {
     })
   }
 
+  const handleUpdateMilestone = () => {
+    if (!editingMilestone) return
+
+    updateMilestone.mutate({
+      id: editingMilestone.id,
+      payload: {
+        title: msTitle,
+        scope_type: msScopeType || undefined,
+        scope_id: msScopeId ? Number(msScopeId) : undefined,
+        planned_value: Number(msPlanned),
+        planned_date: msDate,
+        notes: msNotes,
+        assigned_to: msAssignedTo ? Number(msAssignedTo) : undefined,
+      },
+    })
+  }
+
   const handleCreateBlocker = () => {
     if (!blockerModal) return
     createBlocker.mutate({ entity_type: 'TASK', entity_id: blockerModal, blocker_type: blType, description: blDesc, sla_days: Number(blSla) })
@@ -404,6 +476,7 @@ export default function TaskDetailPage() {
             <Badge variant="default">{FREQ_LABEL[task.frequency]}</Badge>
             <Badge variant="orange">{task.goal_label}</Badge>
             <Badge variant="default">{fmtDate(task.start_date)} → {fmtDate(task.end_date)}</Badge>
+            {task.assignee?.name && <Badge variant="default"><User size={11} style={{ marginRight: 4 }} />{task.assignee.name}</Badge>}
           </>
         }
         actions={
@@ -479,7 +552,7 @@ export default function TaskDetailPage() {
             <div>
               {can('update:milestone') && (
                 <div style={{ marginBottom: 16 }}>
-                  <Button variant="primary" icon={<Plus size={14} />} onClick={() => { setMsTitle(''); setMsDate(''); setMsPlanned(''); setMsAssignedTo(''); setIndicadorModal(true) }}>
+                  <Button variant="primary" icon={<Plus size={14} />} onClick={openCreateMilestone}>
                     Novo Indicador
                   </Button>
                 </div>
@@ -497,7 +570,9 @@ export default function TaskDetailPage() {
                     status={m.status}
                     hasPhoto={!!m.photo_url}
                     notes={m.notes}
-                    onUpdate={can('update:milestone') && m.status !== 'DONE' ? () => setUpdateMs(m) : undefined}
+                    assigneeName={m.assignee?.name}
+                    onUpdate={can('update:milestone') && m.status !== 'DONE' ? () => setProgressMs(m) : undefined}
+                    onEdit={can('update:milestone') ? () => openEditMilestone(m) : undefined}
                   />
                 ))}
                 {indicadores.length === 0 && <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>Nenhum indicador criado.</p>}
@@ -629,7 +704,7 @@ export default function TaskDetailPage() {
               icon={<Plus size={13} />}
               onClick={handleCreateMs}
               loading={createMs.isPending}
-              disabled={isDepartamento() && deptUsers.length > 0 && !msAssignedTo}
+              disabled={task.owner_type === 'DEPARTAMENTO' && deptUsers.length > 0 && !msAssignedTo}
             >
               Criar
             </Button>
@@ -656,14 +731,49 @@ export default function TaskDetailPage() {
         />
       </Modal>
 
-      {/* Update Indicador — shared ProgressModal */}
-      {updateMs && (
-        <ProgressModal
-          ms={updateMs}
+      <Modal open={!!editingMilestone} onClose={() => setEditingMilestone(null)} title="Editar Indicador" width={540}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditingMilestone(null)}>Cancelar</Button>
+            <Button
+              variant="primary"
+              icon={<Pencil size={13} />}
+              onClick={handleUpdateMilestone}
+              loading={updateMilestone.isPending}
+            >
+              Guardar alterações
+            </Button>
+          </>
+        }
+      >
+        <IndicadorForm
+          msTitle={msTitle} setMsTitle={setMsTitle}
+          msScopeType={msScopeType} setMsScopeType={v => { setMsScopeType(v); setMsScopeId('') }}
+          msScopeId={msScopeId} setMsScopeId={setMsScopeId}
+          msPlanned={msPlanned} setMsPlanned={setMsPlanned}
+          msDate={msDate} setMsDate={setMsDate}
+          msNotes={msNotes} setMsNotes={setMsNotes}
+          ascs={ascsData?.data ?? []}
+          regioes={regioesData?.data ?? []}
           goalLabel={task?.goal_label}
-          onClose={() => setUpdateMs(null)}
+          deptUsers={deptUsers.length > 0 ? deptUsers : undefined}
+          msAssignedTo={msAssignedTo} setMsAssignedTo={setMsAssignedTo}
+          currentUserId={user?.id}
+          taskStartDate={task?.start_date ? task.start_date.slice(0, 10) : undefined}
+          taskEndDate={task?.end_date ? task.end_date.slice(0, 10) : undefined}
+          taskTargetValue={targetVal}
+          taskTotalPlanned={Math.max(0, totalPlanned - (editingMilestone?.planned_value ?? 0))}
+        />
+      </Modal>
+
+      {/* Update Indicador — shared ProgressModal */}
+      {progressMs && (
+        <ProgressModal
+          ms={progressMs}
+          goalLabel={task?.goal_label}
+          onClose={() => setProgressMs(null)}
           onSuccess={() => {
-            setUpdateMs(null)
+            setProgressMs(null)
             qc.invalidateQueries({ queryKey: ['indicadores'] })
             qc.invalidateQueries({ queryKey: ['tasks', taskId] })
           }}
@@ -711,6 +821,7 @@ export default function TaskDetailPage() {
             description:  task.description ?? '',
             owner_type:   task.owner_type as any,
             owner_id:     task.owner_id,
+            assigned_to:  task.assigned_to,
             frequency:    task.frequency as any,
             goal_label:   task.goal_label,
             start_value:  task.start_value ?? 0,
