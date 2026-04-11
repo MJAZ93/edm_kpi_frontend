@@ -143,6 +143,8 @@ export interface TaskScope {
   scope_name?: string
 }
 
+export type AggregationType = 'SUM_UP' | 'SUM_DOWN' | 'AVG'
+
 export interface Task {
   id: number
   project_id: number
@@ -158,6 +160,7 @@ export interface Task {
   start_value: number
   current_value: number
   target_value: number
+  aggregation_type: AggregationType
   weight: number
   start_date: string
   end_date: string
@@ -188,6 +191,19 @@ export interface Milestone {
   photo_url?: string
   assigned_to?: number
   assignee?: User
+  created_at?: string
+  updated_at?: string
+}
+
+export interface MilestoneProgressEvent {
+  id: number
+  milestone_id: number
+  user_id: number
+  user?: User
+  increment_value: number
+  period_reference?: string
+  notes?: string
+  photo_url?: string
   created_at?: string
   updated_at?: string
 }
@@ -470,6 +486,7 @@ export interface CreateTaskPayload {
   goal_label: string
   start_value: number
   target_value: number
+  aggregation_type?: AggregationType
   weight: number
   start_date: string
   end_date: string

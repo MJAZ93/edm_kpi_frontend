@@ -156,7 +156,7 @@ export default function DashboardPage() {
     <div>
       <PageHeader
         eyebrow="Visão Geral"
-        title={`Bom dia, ${user?.name?.split(' ')[0] ?? 'utilizador'}`}
+        title={`${new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 19 ? 'Boa tarde' : 'Boa noite'}, ${user?.name?.split(' ')[0] ?? 'utilizador'}`}
         subtitle="Acompanhamento de performance e KPIs da empresa"
         badges={<Badge variant="orange">{user?.role}</Badge>}
         actions={<Button variant="primary" icon={<FolderKanban size={15} />} onClick={() => navigate('/projects')}>Ver Pilares Estratégicos</Button>}

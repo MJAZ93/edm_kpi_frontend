@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -72,6 +72,7 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
   // Selected direcoes state
   const [selectedDirecoes, setSelectedDirecoes] = useState<{ id: number; name: string }[]>([])
   const [pendingDirecaoId, setPendingDirecaoId] = useState('')
+  const [direcaoIdsInit, setDirecaoIdsInit] = useState(false)
 
   const { data: direoesData } = useQuery({
     queryKey: ['direcoes'],
@@ -83,6 +84,19 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
     queryKey: ['projects', { status: 'ACTIVE' }],
     queryFn: () => projectsService.list({ status: 'ACTIVE', limit: 100 }),
   })
+
+  // Initialize selectedDirecoes from initialDirecaoIds when direcoes data loads
+  useEffect(() => {
+    if (direcaoIdsInit || !direoesData?.data || initialDirecaoIds.length === 0) return
+    const mapped = initialDirecaoIds
+      .map(id => {
+        const d = direoesData.data.find((x: any) => x.id === id)
+        return d ? { id: d.id, name: d.name } : null
+      })
+      .filter(Boolean) as { id: number; name: string }[]
+    if (mapped.length > 0) setSelectedDirecoes(mapped)
+    setDirecaoIdsInit(true)
+  }, [direoesData, initialDirecaoIds, direcaoIdsInit])
 
   const direcaoOptions = direoesData?.data?.map(d => ({ value: String(d.id), label: d.name })) ?? []
 
@@ -110,7 +124,9 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
       creator_org_id: v.creator_org_id ? Number(v.creator_org_id) : undefined,
       direcao_ids: showDirecoes && selectedDirecoes.length > 0
         ? selectedDirecoes.map(d => d.id)
-        : undefined,
+        : showSingleDirecao && v.creator_org_id
+          ? [Number(v.creator_org_id)]
+          : undefined,
       status: v.status || undefined,
       goal_label: v.goal_label || undefined,
       frequency: v.frequency || undefined,

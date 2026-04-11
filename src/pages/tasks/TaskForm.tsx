@@ -16,20 +16,21 @@ import { geoService } from '../../services/geo.service'
 import { orgService } from '../../services/org.service'
 import { tasksService } from '../../services/tasks.service'
 import { useAuth } from '../../hooks/useAuth'
-import type { CreateTaskPayload, ScopeType } from '../../types'
+import type { CreateTaskPayload, ScopeType, AggregationType } from '../../types'
 
 const schema = z.object({
-  title:        z.string().min(3),
-  description:  z.string().optional(),
-  owner_type:   z.enum(['CA', 'PELOURO', 'DIRECAO', 'DEPARTAMENTO']),
-  owner_id:     z.coerce.number().min(1),
-  frequency:    z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'BIANNUAL', 'ANNUAL']),
-  goal_label:   z.string().min(2),
-  start_value:  z.coerce.number(),
-  target_value: z.coerce.number(),
-  weight:       z.coerce.number().min(0).max(100),
-  start_date:   z.string().min(1),
-  end_date:     z.string().min(1),
+  title:            z.string().min(3),
+  description:      z.string().optional(),
+  owner_type:       z.enum(['CA', 'PELOURO', 'DIRECAO', 'DEPARTAMENTO']),
+  owner_id:         z.coerce.number().min(1),
+  frequency:        z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'BIANNUAL', 'ANNUAL']),
+  goal_label:       z.string().min(2),
+  start_value:      z.coerce.number(),
+  target_value:     z.coerce.number(),
+  aggregation_type: z.enum(['SUM_UP', 'SUM_DOWN', 'AVG']).default('SUM_UP'),
+  weight:           z.coerce.number().min(0).max(100),
+  start_date:       z.string().min(1),
+  end_date:         z.string().min(1),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -40,6 +41,8 @@ interface Props {
   onSubmit: (payload: CreateTaskPayload) => void
   defaultValues?: Partial<FormValues & { assigned_to?: number }>
   initialScopes?: { scope_type: ScopeType; scope_id: number; name: string }[]
+  existingTaskId?: number
+  onValidityChange?: (valid: boolean) => void
 }
 
 const FREQ_OPTS = [
@@ -53,6 +56,11 @@ const FREQ_OPTS = [
 const ROLE_OPTS = [
   { value: 'DIRECAO',      label: 'Direcção'     },
   { value: 'DEPARTAMENTO', label: 'Departamento' },
+]
+const AGG_TYPE_OPTS = [
+  { value: 'SUM_UP',   label: 'Crescente acumulativo',   hint: 'Indicadores somam para atingir a meta' },
+  { value: 'SUM_DOWN', label: 'Decrescente acumulativo', hint: 'Indicadores reduzem a partir do valor inicial' },
+  { value: 'AVG',      label: 'Média',                   hint: 'Média dos indicadores = valor da acção' },
 ]
 const SCOPE_TYPE_OPTS = [
   { value: 'ASC',     label: 'ASC'     },
@@ -73,7 +81,7 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function TaskForm({ id, projectId, onSubmit, defaultValues, initialScopes = [] }: Props) {
+export default function TaskForm({ id, projectId, onSubmit, defaultValues, initialScopes = [], existingTaskId, onValidityChange }: Props) {
   const { user } = useAuth()
   const isAdmin       = user?.role === 'ADMIN'
   const isDirecao     = user?.role === 'DIRECAO'
@@ -85,10 +93,11 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema) as any,
     defaultValues: {
-      owner_type:  autoOwner ? 'DEPARTAMENTO' : 'DEPARTAMENTO',
-      frequency:   'MONTHLY',
-      weight:      60,
-      start_value: 0,
+      owner_type:       autoOwner ? 'DEPARTAMENTO' : 'DEPARTAMENTO',
+      frequency:        'MONTHLY',
+      aggregation_type: 'SUM_UP',
+      weight:           60,
+      start_value:      0,
       ...defaultValues,
     },
   })
@@ -112,7 +121,10 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
     queryKey: ['tasks', { project_id: projectId }],
     queryFn: () => tasksService.list(projectId, { limit: 100 }),
   })
-  const usedWeight = (existingTasksData?.data ?? []).reduce((sum, t) => sum + (t.weight ?? 0), 0)
+  const usedWeight = (existingTasksData?.data ?? []).reduce((sum, t) => {
+    if (existingTaskId && t.id === existingTaskId) return sum
+    return sum + (t.weight ?? 0)
+  }, 0)
   const availableMax = Math.max(0, 100 - usedWeight)
 
   // Geo data
@@ -248,9 +260,13 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
 
   const removeScope = (i: number) => setScopes(s => s.filter((_, idx) => idx !== i))
 
+  const weightValue = watch('weight')
+  const overBudget = usedWeight + (Number(weightValue) || 0) > 100
+
   const submit = (v: FormValues) => {
     onSubmit({
       ...v,
+      aggregation_type: (v.aggregation_type ?? 'SUM_UP') as AggregationType,
       assigned_to: selectedAssigneeId ? Number(selectedAssigneeId) : undefined,
       scopes: scopes.map(({ scope_type, scope_id }) => ({ scope_type, scope_id })),
     })
@@ -369,9 +385,26 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
           {...register('goal_label')}
         />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Input label="Valor inicial" type="number" {...register('start_value')} />
-          <Input label="Valor alvo" type="number" error={errors.target_value?.message} {...register('target_value')} />
+          <Input label="Valor inicial" type="number" step="any" {...register('start_value')} />
+          <Input label="Valor alvo" type="number" step="any" error={errors.target_value?.message} {...register('target_value')} />
         </div>
+        <Controller
+          name="aggregation_type"
+          control={control}
+          render={({ field }) => (
+            <div>
+              <SearchableSelect
+                label="Tipo de incidência"
+                options={AGG_TYPE_OPTS}
+                value={field.value ?? 'SUM_UP'}
+                onChange={field.onChange}
+              />
+              <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4, fontStyle: 'italic' }}>
+                {AGG_TYPE_OPTS.find(o => o.value === (field.value ?? 'SUM_UP'))?.hint}
+              </p>
+            </div>
+          )}
+        />
         <Controller
           name="frequency"
           control={control}
@@ -386,9 +419,8 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
             <WeightSlider
               value={Number(field.value) || 0}
               onChange={field.onChange}
-              max={usedWeight > 0 ? availableMax : 100}
               usedByOthers={usedWeight > 0 ? usedWeight : undefined}
-              error={errors.weight?.message}
+              error={overBudget ? 'Peso total excede 100%. Ajuste antes de guardar.' : errors.weight?.message}
             />
           )}
         />

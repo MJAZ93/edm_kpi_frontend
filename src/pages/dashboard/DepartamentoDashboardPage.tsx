@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ShieldAlert, Clock, Building2, ListTodo, AlertOctagon,
   ChevronRight, UserX, ArrowUpFromLine, TrendingUp,
-  Plus, CheckCircle2, Circle, Trophy,
+  Plus, CheckCircle2, Circle, Trophy, User, History, Paperclip,
 } from 'lucide-react'
 import { dashboardService } from '../../services/dashboard.service'
 import { milestonesService } from '../../services/milestones.service'
@@ -12,10 +12,12 @@ import { useAuth } from '../../hooks/useAuth'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
+import Modal from '../../components/ui/Modal'
 import StatCard from '../../components/domain/StatCard'
 import MemberDashboardPage from './MemberDashboardPage'
 import PerformanceMap from '../../components/map/PerformanceMap'
 import ProgressBar from '../../components/ui/ProgressBar'
+import type { MilestoneProgressEvent } from '../../types'
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
 
@@ -42,6 +44,28 @@ const FREQ_LABEL: Record<string, string> = {
   QUARTERLY: 'Trimestral',
   BIANNUAL: 'Semestral',
   ANNUAL: 'Anual',
+}
+
+function fmtDate(d?: string) {
+  if (!d) return '—'
+  const date = new Date(d)
+  return isNaN(date.getTime())
+    ? d
+    : date.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function fmtDateTime(d?: string) {
+  if (!d) return '—'
+  const date = new Date(d)
+  return isNaN(date.getTime())
+    ? d
+    : date.toLocaleString('pt-MZ', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
 }
 
 // ── Score ring ────────────────────────────────────────────────────────────────
@@ -90,6 +114,7 @@ export default function DepartamentoDashboardPage() {
   const [msAssignee, setMsAssignee]   = useState('')
   const [editingMsId, setEditingMsId] = useState<number | null>(null)
   const [editingAssignee, setEditingAssignee] = useState('')
+  const [detailMsId, setDetailMsId] = useState<number | null>(null)
 
   // Data
   const { data: overview, isLoading } = useQuery({
@@ -112,6 +137,18 @@ export default function DepartamentoDashboardPage() {
   })
   const indicadores = msData?.data ?? []
 
+  const { data: milestoneDetail, isLoading: isMilestoneDetailLoading } = useQuery({
+    queryKey: ['indicadores', 'detail', detailMsId],
+    queryFn: () => milestonesService.get(detailMsId!),
+    enabled: detailMsId !== null,
+  })
+
+  const { data: milestoneHistoryData, isLoading: isMilestoneHistoryLoading } = useQuery({
+    queryKey: ['indicadores', 'progress', detailMsId],
+    queryFn: () => milestonesService.listProgress(detailMsId!),
+    enabled: detailMsId !== null,
+  })
+
   const { data: empData } = useQuery({
     queryKey: ['dashboard', 'employee-ranking'],
     queryFn: dashboardService.getEmployeeRanking,
@@ -132,6 +169,9 @@ export default function DepartamentoDashboardPage() {
     mutationFn: ({ id, payload }: { id: number; payload: any }) => milestonesService.update(id, payload),
     onSuccess: () => {
       refetchMs()
+      if (editingMsId) {
+        queryClient.invalidateQueries({ queryKey: ['indicadores', 'detail', editingMsId] })
+      }
       setEditingMsId(null)
       setEditingAssignee('')
     },
@@ -142,8 +182,12 @@ export default function DepartamentoDashboardPage() {
   const dept        = overview?.department
   const allTasks    = (overview?.tasks ?? []) as any[]
   const blockers    = (overview?.pending_blockers ?? []) as any[]
-  const stats       = overview?.stats ?? { total: 0, unassigned: 0, from_director: 0, active: 0 }
+  const overdueTasks = (overview?.overdue_tasks ?? []) as any[]
+  const overdueMilestones = (overview?.overdue_milestones ?? []) as any[]
+  const stats       = overview?.stats ?? { total: 0, unassigned: 0, from_director: 0, active: 0, overdue: 0, overdue_milestones: 0 }
   const mapFeatures = mapData?.features ?? []
+  const selectedMilestone = milestoneDetail ?? indicadores.find((ms: any) => ms.id === detailMsId) ?? null
+  const milestoneHistory = milestoneHistoryData?.events ?? []
 
   const tl = (dept?.traffic_light ?? 'YELLOW') as TL
   const c  = TL_COLORS[tl]
@@ -176,7 +220,7 @@ export default function DepartamentoDashboardPage() {
           color: '#fff',
         }}>
           <p style={{ fontSize: 12, opacity: 0.7, marginBottom: 6, textTransform: 'capitalize' }}>{dayName}, {dateStr}</p>
-          <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 4 }}>Bom dia, {user?.name ?? 'Colaborador'}</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 4 }}>{new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 19 ? 'Boa tarde' : 'Boa noite'}, {user?.name ?? 'Colaborador'}</h1>
           <p style={{ fontSize: 13, opacity: 0.75 }}>Painel do Colaborador</p>
         </div>
         <MemberDashboardPage />
@@ -209,7 +253,7 @@ export default function DepartamentoDashboardPage() {
             {dayName}, {dateStr}
           </p>
           <h1 style={{ fontSize: 26, fontWeight: 900, color: 'var(--color-text)', marginBottom: 8, letterSpacing: '-0.02em' }}>
-            Bom dia, {user?.name ?? 'Chefe de Departamento'}
+            {new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 19 ? 'Boa tarde' : 'Boa noite'}, {user?.name ?? 'Chefe de Departamento'}
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Building2 size={14} style={{ color: c.text, flexShrink: 0 }} />
@@ -237,7 +281,7 @@ export default function DepartamentoDashboardPage() {
       </div>
 
       {/* ── Stat cards ───────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16 }}>
         <StatCard
           label="Total Acções"
           value={stats.total ?? 0}
@@ -256,11 +300,139 @@ export default function DepartamentoDashboardPage() {
           color="var(--color-traffic-yellow-bg)"
         />
         <StatCard
+          label="Tarefas Atrasadas"
+          value={stats.overdue ?? 0}
+          icon={<Clock size={17} />}
+          color={(stats.overdue ?? 0) > 0 ? 'var(--color-traffic-red-bg)' : 'var(--color-bg-strong)'}
+        />
+        <StatCard
+          label="Marcos Atrasados"
+          value={stats.overdue_milestones ?? 0}
+          icon={<AlertOctagon size={17} />}
+          color={(stats.overdue_milestones ?? 0) > 0 ? 'var(--color-traffic-red-bg)' : 'var(--color-bg-strong)'}
+        />
+        <StatCard
           label="Impedimentos Pendentes"
           value={blockers.length}
           icon={<ShieldAlert size={17} />}
           color={blockers.length > 0 ? 'var(--color-traffic-red-bg)' : 'var(--color-bg-strong)'}
         />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
+        <Card variant="elevated">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Clock size={15} style={{ color: 'var(--color-traffic-red)' }} />
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Tarefas Atrasadas
+              </p>
+              <Badge variant={(stats.overdue ?? 0) > 0 ? 'danger' : 'default'}>{stats.overdue ?? 0}</Badge>
+            </div>
+          </div>
+
+          {overdueTasks.length === 0 ? (
+            <div style={{ padding: '8px 0 2px', color: 'var(--color-text-muted)', fontSize: 13 }}>
+              Nenhuma tarefa está fora da periodicidade no momento.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+              {overdueTasks.map((task: any) => (
+                <div
+                  key={task.id}
+                  onClick={() => setSelectedTask((overview?.tasks ?? []).find((t: any) => t.id === task.id) ?? null)}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    background: 'var(--color-traffic-red-bg)',
+                    border: '1px solid rgba(220,38,38,0.18)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', lineHeight: 1.3, flex: 1 }}>
+                      {task.title}
+                    </p>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-traffic-red)', whiteSpace: 'nowrap' }}>
+                      {task.overdue_days}d atraso
+                    </span>
+                  </div>
+                  {task.project_title && (
+                    <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 8 }}>{task.project_title}</p>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text)' }}>
+                      {task.assignee_name || 'Sem responsável'}
+                    </span>
+                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Responsável</span>
+                    {task.frequency && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                        {FREQ_LABEL[task.frequency] ?? task.frequency}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card variant="elevated">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertOctagon size={15} style={{ color: 'var(--color-traffic-red)' }} />
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Marcos Atrasados
+              </p>
+              <Badge variant={(stats.overdue_milestones ?? 0) > 0 ? 'danger' : 'default'}>{stats.overdue_milestones ?? 0}</Badge>
+            </div>
+          </div>
+
+          {overdueMilestones.length === 0 ? (
+            <div style={{ padding: '8px 0 2px', color: 'var(--color-text-muted)', fontSize: 13 }}>
+              Nenhum marco está fora da periodicidade no momento.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+              {overdueMilestones.map((ms: any) => (
+                <div
+                  key={ms.id}
+                  onClick={() => navigate(`/tasks/${ms.task_id}`)}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    background: 'var(--color-traffic-red-bg)',
+                    border: '1px solid rgba(220,38,38,0.18)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', lineHeight: 1.3, flex: 1 }}>
+                      {ms.title}
+                    </p>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-traffic-red)', whiteSpace: 'nowrap' }}>
+                      {ms.overdue_days}d atraso
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+                    {ms.task_title}{ms.project_title ? ` · ${ms.project_title}` : ''}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text)' }}>
+                      {ms.assignee_name || 'Sem responsável'}
+                    </span>
+                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Responsável</span>
+                    {ms.frequency && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                        {FREQ_LABEL[ms.frequency] ?? ms.frequency}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
 
       {/* ── Tasks + sidebar ───────────────────────────────────────────────────── */}
@@ -393,6 +565,11 @@ export default function DepartamentoDashboardPage() {
                             Da Direcção
                           </span>
                         )}
+                        {task.is_overdue && (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-traffic-red-bg)', color: 'var(--color-traffic-red)', border: '1px solid rgba(220,38,38,0.2)' }}>
+                            {task.overdue_days ?? 0}d atraso
+                          </span>
+                        )}
                         {task.is_unassigned && (
                           <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'var(--color-traffic-red-bg)', color: 'var(--color-traffic-red)', border: '1px solid rgba(220,38,38,0.2)' }}>
                             Sem actividade
@@ -405,6 +582,22 @@ export default function DepartamentoDashboardPage() {
                         <p style={{ fontSize: 11, color: 'var(--color-traffic-red)', fontStyle: 'italic' }}>
                           Nenhum técnico atribuído
                         </p>
+                      ) : task.assignee_name ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{
+                            width: 24, height: 24, borderRadius: '50%',
+                            background: 'var(--color-primary)', color: '#fff',
+                            fontSize: 11, fontWeight: 800,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            {task.assignee_name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text)', lineHeight: 1.2 }}>{task.assignee_name}</p>
+                            <p style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Responsável da tarefa</p>
+                          </div>
+                        </div>
                       ) : (
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {(task.assignees ?? []).map((a: any) => (
@@ -496,6 +689,7 @@ export default function DepartamentoDashboardPage() {
                       </select>
                       <input
                         type="number"
+                        step="any"
                         placeholder={selectedTask?.goal_label || 'Valor planeado'}
                         value={msValue}
                         onChange={e => setMsValue(e.target.value)}
@@ -579,7 +773,13 @@ export default function DepartamentoDashboardPage() {
                           : 'var(--color-primary)'
 
                       return (
-                        <div key={ms.id} style={{ padding: '8px 10px', background: 'var(--color-bg-strong)', borderRadius: 8 }}>
+                        <div
+                          key={ms.id}
+                          onClick={() => setDetailMsId(ms.id)}
+                          style={{ padding: '8px 10px', background: 'var(--color-bg-strong)', borderRadius: 8, cursor: 'pointer', border: '1px solid transparent' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-primary)33' }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'transparent' }}
+                        >
                           {/* Title + date + status */}
                           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                             <div style={{ marginTop: 1, flexShrink: 0, color: iconColor }}>
@@ -628,6 +828,7 @@ export default function DepartamentoDashboardPage() {
                             {isEditing ? (
                               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                 <select
+                                  onClick={e => e.stopPropagation()}
                                   value={editingAssignee}
                                   onChange={e => setEditingAssignee(e.target.value)}
                                   style={{ flex: 1, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: 11 }}
@@ -640,14 +841,17 @@ export default function DepartamentoDashboardPage() {
                                   ))}
                                 </select>
                                 <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    updateMs.mutate({ id: ms.id, payload: { assigned_to: parseInt(editingAssignee) } })
+                                  }}
                                   disabled={!editingAssignee || updateMs.isPending}
-                                  onClick={() => updateMs.mutate({ id: ms.id, payload: { assigned_to: parseInt(editingAssignee) } })}
                                   style={{ padding: '5px 10px', borderRadius: 6, background: editingAssignee ? 'var(--color-primary)' : 'var(--color-border)', color: editingAssignee ? '#fff' : 'var(--color-text-muted)', border: 'none', cursor: editingAssignee ? 'pointer' : 'not-allowed', fontSize: 11, fontWeight: 700 }}
                                 >
                                   {updateMs.isPending ? '…' : 'OK'}
                                 </button>
                                 <button
-                                  onClick={() => { setEditingMsId(null); setEditingAssignee('') }}
+                                  onClick={(e) => { e.stopPropagation(); setEditingMsId(null); setEditingAssignee('') }}
                                   style={{ padding: '5px 8px', borderRadius: 6, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 11 }}
                                 >
                                   ✕
@@ -662,7 +866,7 @@ export default function DepartamentoDashboardPage() {
                                   <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Técnico responsável</span>
                                 </div>
                                 <button
-                                  onClick={() => { setEditingMsId(ms.id); setEditingAssignee(ms.assigned_to ? String(ms.assigned_to) : '') }}
+                                  onClick={(e) => { e.stopPropagation(); setEditingMsId(ms.id); setEditingAssignee(ms.assigned_to ? String(ms.assigned_to) : '') }}
                                   style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}
                                   onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-primary)')}
                                   onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
@@ -874,6 +1078,121 @@ export default function DepartamentoDashboardPage() {
           )}
         </Card>
       </div>
+
+      <Modal
+        open={detailMsId !== null}
+        onClose={() => setDetailMsId(null)}
+        title={selectedMilestone ? `Milestone: ${selectedMilestone.title}` : 'Detalhes do Milestone'}
+        width={720}
+        footer={
+          <button
+            onClick={() => setDetailMsId(null)}
+            style={{ padding: '8px 14px', borderRadius: 8, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+          >
+            Fechar
+          </button>
+        }
+      >
+        {(isMilestoneDetailLoading && !selectedMilestone) || isMilestoneHistoryLoading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 36 }}>
+            <Spinner size="md" />
+          </div>
+        ) : !selectedMilestone ? (
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Não foi possível carregar o milestone.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <Badge variant={selectedMilestone.status === 'DONE' ? 'success' : selectedMilestone.status === 'BLOCKED' ? 'danger' : 'warning'}>
+                {selectedMilestone.status === 'DONE' ? 'Concluído' : selectedMilestone.status === 'BLOCKED' ? 'Bloqueado' : 'Pendente'}
+              </Badge>
+              {selectedMilestone.frequency && <Badge variant="default">{FREQ_LABEL[selectedMilestone.frequency] ?? selectedMilestone.frequency}</Badge>}
+              {selectedMilestone.assignee?.name && <Badge variant="default"><User size={11} style={{ marginRight: 4 }} />{selectedMilestone.assignee.name}</Badge>}
+            </div>
+
+            <Card variant="bordered" padding={18}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Planeado</p>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text)' }}>{(selectedMilestone.planned_value ?? 0).toLocaleString('pt-PT')}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Realizado</p>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-primary)' }}>{(selectedMilestone.achieved_value ?? 0).toLocaleString('pt-PT')}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Prazo</p>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text)' }}>{fmtDate(selectedMilestone.planned_date)}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Última actualização</p>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text)' }}>{fmtDateTime(selectedMilestone.updated_at)}</p>
+                </div>
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <ProgressBar
+                  value={selectedMilestone.planned_value > 0 ? Math.min(100, ((selectedMilestone.achieved_value ?? 0) / selectedMilestone.planned_value) * 100) : 0}
+                  variant="auto"
+                  showLabel
+                />
+              </div>
+              {selectedMilestone.notes && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--color-border)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>Notas do milestone</p>
+                  <p style={{ fontSize: 13, color: 'var(--color-text)', lineHeight: 1.6 }}>{selectedMilestone.notes}</p>
+                </div>
+              )}
+              {selectedMilestone.photo_url && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--color-border)' }}>
+                  <a
+                    href={selectedMilestone.photo_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--color-primary)', fontWeight: 700, textDecoration: 'none' }}
+                  >
+                    <Paperclip size={14} />
+                    Ver anexo actual
+                  </a>
+                </div>
+              )}
+            </Card>
+
+            <Card variant="bordered" padding={18}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <History size={15} style={{ color: 'var(--color-primary)' }} />
+                <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)' }}>Histórico de actualizações</p>
+                <Badge variant="default">{milestoneHistory.length}</Badge>
+              </div>
+
+              {milestoneHistory.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Este milestone ainda não tem actualizações registadas.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {milestoneHistory.map((event: MilestoneProgressEvent) => (
+                    <div key={event.id} style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--color-surface-muted)', border: '1px solid var(--color-border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)' }}>
+                          +{(event.increment_value ?? 0).toLocaleString('pt-PT')}
+                        </p>
+                        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 700 }}>
+                          {fmtDateTime(event.created_at)}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: event.notes ? 6 : 0 }}>
+                        {event.user?.name ?? 'Utilizador'} registou esta actualização
+                      </p>
+                      {event.notes && (
+                        <p style={{ fontSize: 13, color: 'var(--color-text)', lineHeight: 1.5 }}>
+                          {event.notes}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+      </Modal>
 
       {/* ── Map ──────────────────────────────────────────────────────────────── */}
       <Card variant="elevated">

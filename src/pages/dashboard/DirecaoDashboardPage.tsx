@@ -185,7 +185,7 @@ export default function DirecaoDashboardPage() {
             {dayName}, {dateStr}
           </p>
           <h1 style={{ fontSize: 26, fontWeight: 900, color: 'var(--color-text)', marginBottom: 8, letterSpacing: '-0.02em' }}>
-            Bom dia, {user?.name ?? 'Director'}
+            {new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 19 ? 'Boa tarde' : 'Boa noite'}, {user?.name ?? 'Director'}
           </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Building2 size={14} style={{ color: c.text, flexShrink: 0 }} />
@@ -600,8 +600,8 @@ export default function DirecaoDashboardPage() {
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>Todos os indicadores estão a progredir</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {stalled.map((task: any) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
+              {stalled.slice(0, 6).map((task: any) => (
                 <div
                   key={task.id}
                   onClick={() => navigate(`/projects`)}
@@ -642,6 +642,19 @@ export default function DirecaoDashboardPage() {
                 </div>
               ))}
             </div>
+          )}
+          {stalled.length > 6 && (
+            <button
+              onClick={() => navigate('/projects')}
+              style={{
+                marginTop: 12, width: '100%', padding: '8px 0', borderRadius: 8,
+                border: '1.5px solid var(--color-border)', background: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700, color: 'var(--color-primary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+              }}
+            >
+              Ver todos ({stalled.length}) <ChevronRight size={13} />
+            </button>
           )}
         </Card>
 
@@ -827,8 +840,8 @@ export default function DirecaoDashboardPage() {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: selectedEmp ? '1fr 300px' : '1fr', gap: 20 }}>
             {/* Ranking list */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {filteredEmps.slice(0, 10).map((emp: EmployeeRankItem, i: number) => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 480, overflowY: 'auto' }}>
+              {filteredEmps.slice(0, 6).map((emp: EmployeeRankItem, i: number) => {
                 const etl = ((emp.traffic_light ?? 'RED') in TL_COLORS ? emp.traffic_light : 'RED') as TL
                 const ec  = TL_COLORS[etl]
                 const isTop = i < 3

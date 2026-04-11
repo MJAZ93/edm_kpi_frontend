@@ -37,11 +37,12 @@ export default function ProgressBar({ value, max = 100, height = 8, color, showL
           {showLabel && <span style={{ fontSize: 12, fontWeight: 700, color: fillColor }}>{Math.round(pct)}%</span>}
         </div>
       )}
-      <div style={{ background: 'var(--color-bg-strong)', borderRadius: 999, height, overflow: 'hidden' }}>
+      <div style={{ background: 'rgba(120, 80, 20, 0.13)', borderRadius: 999, height, overflow: 'hidden', border: '1px solid rgba(120, 80, 20, 0.08)' }}>
         <div style={{
           height: '100%', width: `${pct}%`, borderRadius: 999,
-          background: `linear-gradient(90deg, ${fillColor}dd, ${fillColor})`,
+          background: fillColor,
           transition: 'width 400ms ease',
+          minWidth: pct > 0 ? 4 : 0,
         }} />
       </div>
     </div>

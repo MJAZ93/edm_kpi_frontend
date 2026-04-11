@@ -98,7 +98,7 @@ export default function CaDashboardPage() {
             {dayName}, {dateStr}
           </p>
           <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 4, letterSpacing: '-0.02em' }}>
-            Bom dia, {user?.name?.split(' ')[0] ?? 'utilizador'}
+            {new Date().getHours() < 12 ? 'Bom dia' : new Date().getHours() < 19 ? 'Boa tarde' : 'Boa noite'}, {user?.name?.split(' ')[0] ?? 'utilizador'}
           </h1>
           <p style={{ fontSize: 14, opacity: 0.75, fontWeight: 500 }}>Painel executivo · Visão geral de performance</p>
         </div>

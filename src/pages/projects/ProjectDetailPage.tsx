@@ -23,6 +23,7 @@ import PerformanceScore from '../../components/domain/PerformanceScore'
 import TaskCard from '../../components/domain/TaskCard'
 import PerformanceLineChart from '../../components/charts/PerformanceLineChart'
 import GanttChart from '../../components/charts/GanttChart'
+import HistoryTab from '../../components/domain/HistoryTab'
 import TaskForm from '../tasks/TaskForm'
 import ProjectForm from './ProjectForm'
 import type { CreateTaskPayload, CreateProjectPayload, ScopeType } from '../../types'
@@ -56,6 +57,7 @@ export default function ProjectDetailPage() {
   const { can, user } = useAuth()
   const qc = useQueryClient()
   const [taskModal, setTaskModal] = useState(false)
+  const [taskFormValid, setTaskFormValid] = useState(true)
   const [deleteModal, setDeleteModal] = useState(false)
   const [editModal, setEditModal] = useState(false)
   const [editingProgress, setEditingProgress] = useState(false)
@@ -153,7 +155,10 @@ export default function ProjectDetailPage() {
   }, [direcoesData])
 
   const taskOwnerLabel = (task: typeof tasks[number]) => {
-    const base = task.owner_name ?? task.owner_type
+    const orgName = task.owner_type === 'DEPARTAMENTO' ? deptMap[task.owner_id]
+      : task.owner_type === 'DIRECAO' ? direcaoMap[task.owner_id]
+      : undefined
+    const base = orgName ? `${task.owner_type} · ${orgName}` : (task.owner_name ?? task.owner_type)
     return task.assignee?.name ? `${base} · ${task.assignee.name}` : base
   }
 
@@ -580,22 +585,27 @@ export default function ProjectDetailPage() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-          {tasks.map(t => (
-            <TaskCard
-              key={t.id}
-              title={t.title}
-              frequency={t.frequency}
-              goalLabel={t.goal_label}
-              startValue={t.start_value}
-              currentValue={t.current_value}
-              targetValue={t.target_value}
-              indicadoresTotal={0}
-              milesDone={0}
-              trafficLight={(t.performance?.traffic_light ?? 'YELLOW') as 'GREEN' | 'YELLOW' | 'RED'}
-              ownerLabel={taskOwnerLabel(t)}
-              onClick={() => navigate(`/tasks/${t.id}`)}
-            />
-          ))}
+          {tasks.map((t, idx) => {
+            const indicadores = indicadorQueries[idx]?.data?.data ?? []
+            const doneCount = indicadores.filter((ms: any) => ms.status === 'DONE').length
+
+            return (
+              <TaskCard
+                key={t.id}
+                title={t.title}
+                frequency={t.frequency}
+                goalLabel={t.goal_label}
+                startValue={t.start_value}
+                currentValue={t.current_value}
+                targetValue={t.target_value}
+                indicadoresTotal={indicadores.length}
+                milesDone={doneCount}
+                trafficLight={(t.performance?.traffic_light ?? 'YELLOW') as 'GREEN' | 'YELLOW' | 'RED'}
+                ownerLabel={taskOwnerLabel(t)}
+                onClick={() => navigate(`/tasks/${t.id}`)}
+              />
+            )
+          })}
         </div>
       )}
     </div>
@@ -760,6 +770,7 @@ export default function ProjectDetailPage() {
         { key: 'gantt',     label: 'Cronograma' },
         { key: 'scope',     label: 'Âmbito & Mapa' },
         { key: 'progress',  label: 'Progresso' },
+        { key: 'history',   label: 'Histórico' },
       ]}>
         {(activeTab) => {
           if (activeTab === 'overview') return (
@@ -796,6 +807,7 @@ export default function ProjectDetailPage() {
           if (activeTab === 'gantt')    return GanttSection
           if (activeTab === 'scope')    return ScopeSection
           if (activeTab === 'progress') return ProgressSection
+          if (activeTab === 'history')  return <HistoryTab entityType="project" entityId={project.id} valueLabel="Valor" />
 
           return null
         }}
@@ -816,6 +828,7 @@ export default function ProjectDetailPage() {
             title:        project.title,
             description:  project.description ?? '',
             creator_type: project.creator_type as any,
+            creator_org_id: project.creator_org_id ? String(project.creator_org_id) : '',
             weight:       project.weight,
             start_date:   project.start_date?.split('T')[0] ?? '',
             end_date:     project.end_date?.split('T')[0] ?? '',
@@ -826,6 +839,7 @@ export default function ProjectDetailPage() {
             start_value:  project.start_value,
             target_value: project.target_value,
           }}
+          initialDirecaoIds={project.direcoes?.map((d: any) => d.id) ?? []}
           onSubmit={payload => updateProject.mutate(payload)}
         />
       </Modal>
@@ -834,11 +848,11 @@ export default function ProjectDetailPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setTaskModal(false)}>Cancelar</Button>
-            <Button variant="primary" form="task-form" type="submit" loading={createTask.isPending} icon={<Plus size={14} />}>Criar Acção</Button>
+            <Button variant="primary" form="task-form" type="submit" loading={createTask.isPending} disabled={!taskFormValid} icon={<Plus size={14} />}>Criar Acção</Button>
           </>
         }
       >
-        <TaskForm id="task-form" projectId={projectId} onSubmit={payload => createTask.mutate(payload)} />
+        <TaskForm id="task-form" projectId={projectId} onSubmit={payload => createTask.mutate(payload)} onValidityChange={setTaskFormValid} />
       </Modal>
 
       <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title="Eliminar pilar estratégico"

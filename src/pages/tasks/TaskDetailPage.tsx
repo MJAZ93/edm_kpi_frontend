@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, MapPin, Target, Pencil, User } from 'lucide-react'
+import { Plus, FileText, MapPin, Target, Pencil, User, Trophy, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { tasksService } from '../../services/tasks.service'
 import { milestonesService } from '../../services/milestones.service'
@@ -27,9 +27,11 @@ import ProgressBar from '../../components/ui/ProgressBar'
 import MilestoneCard from '../../components/domain/MilestoneCard'
 import BlockerCard from '../../components/domain/BlockerCard'
 import ProgressModal from '../../components/domain/ProgressModal'
+import MilestoneDetailModal from '../../components/domain/MilestoneDetailModal'
 import ForecastAlert from '../../components/domain/ForecastAlert'
 import ForecastChart from '../../components/charts/ForecastChart'
 import ScopeMap from '../../components/map/ScopeMap'
+import HistoryTab from '../../components/domain/HistoryTab'
 import TaskForm from './TaskForm'
 import type { CreateMilestonePayload, CreateBlockerPayload, CreateTaskPayload, ScopeType, MilestoneStatus, BlockerType, ASC, Regiao } from '../../types'
 
@@ -56,6 +58,18 @@ const BLOCKER_TYPE_OPTS = [
   { value: 'LOGISTIC', label: 'Logístico' }, { value: 'FINANCIAL', label: 'Financeiro' },
   { value: 'TECHNICAL', label: 'Técnico' }, { value: 'LEGAL', label: 'Legal' },
 ]
+
+const TL_COLORS = {
+  GREEN:  { text: 'var(--color-traffic-green)' },
+  YELLOW: { text: 'var(--color-traffic-yellow)' },
+  RED:    { text: 'var(--color-traffic-red)' },
+}
+
+function getTrafficLight(score: number): 'GREEN' | 'YELLOW' | 'RED' {
+  if (score >= 90) return 'GREEN'
+  if (score >= 60) return 'YELLOW'
+  return 'RED'
+}
 
 // ── Indicador form section header ─────────────────────────────────────────────
 function MsSectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
@@ -223,7 +237,7 @@ function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
         })()}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Input label={goalLabel || 'Valor planeado'} type="number" min={0} value={msPlanned} onChange={e => setMsPlanned(e.target.value)} />
+          <Input label={goalLabel || 'Valor planeado'} type="number" min={0} step="any" value={msPlanned} onChange={e => setMsPlanned(e.target.value)} />
           <DatePicker
             label="Data limite"
             value={msDate}
@@ -273,12 +287,16 @@ export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const taskId = Number(id)
   const { can, user } = useAuth()
+  const navigate = useNavigate()
   const qc = useQueryClient()
 
   const [editModal, setEditModal] = useState(false)
+  const [deleteModal, setDeleteModal] = useState(false)
+  const [taskFormValid, setTaskFormValid] = useState(true)
   const [indicadorModal, setIndicadorModal] = useState(false)
   const [progressMs, setProgressMs] = useState<any | null>(null)
   const [editingMilestone, setEditingMilestone] = useState<any | null>(null)
+  const [detailMsId, setDetailMsId] = useState<number | null>(null)
   const [blockerModal, setBlockerModal] = useState<number | null>(null)
   const [rejectModal, setRejectModal] = useState<number | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -355,6 +373,12 @@ export default function TaskDetailPage() {
     onError: () => toast.error('Erro ao actualizar acção.'),
   })
 
+  const deleteTask = useMutation({
+    mutationFn: () => tasksService.remove(taskId),
+    onSuccess: () => { toast.success('Acção eliminada.'); navigate(`/projects/${task?.project_id}`) },
+    onError: () => toast.error('Erro ao eliminar acção.'),
+  })
+
   const createMs = useMutation({
     mutationFn: (p: CreateMilestonePayload) => milestonesService.create(taskId, p),
     onSuccess: () => { toast.success('Indicador criado.'); qc.invalidateQueries({ queryKey: ['indicadores'] }); setIndicadorModal(false) },
@@ -367,6 +391,9 @@ export default function TaskDetailPage() {
       toast.success('Indicador actualizado.')
       qc.invalidateQueries({ queryKey: ['indicadores'] })
       qc.invalidateQueries({ queryKey: ['tasks', taskId] })
+      if (editingMilestone?.id) {
+        qc.invalidateQueries({ queryKey: ['milestone-detail', editingMilestone.id] })
+      }
       setEditingMilestone(null)
     },
     onError: () => toast.error('Erro ao actualizar indicador.'),
@@ -390,18 +417,64 @@ export default function TaskDetailPage() {
     onError: () => toast.error('Erro ao rejeitar.'),
   })
 
-  if (isLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>
-  if (!task) return <div style={{ padding: 40 }}>Acção não encontrada.</div>
-
   const indicadores = indicadoresData?.data ?? []
   const blockers = blockersData?.data ?? []
-  const startVal = task.start_value ?? 0
-  const currentVal = task.current_value ?? 0
-  const targetVal = task.target_value ?? 0
+  const startVal = task?.start_value ?? 0
+  const currentVal = task?.current_value ?? 0
+  const targetVal = task?.target_value ?? 0
   const pct = targetVal > startVal ? Math.min(100, ((currentVal - startVal) / (targetVal - startVal)) * 100) : 0
 
   const totalPlanned = indicadores.reduce((sum: number, m: any) => sum + (m.planned_value ?? 0), 0)
   const unassigned = Math.max(0, targetVal - totalPlanned)
+
+  const workerRanking = useMemo(() => {
+    if (!task || task.owner_type !== 'DEPARTAMENTO' || deptUsers.length === 0) return []
+
+    const userMap = new Map<number, {
+      id: number
+      name: string
+      planned: number
+      achieved: number
+      msTotal: number
+      msDone: number
+    }>()
+
+    deptUsers.forEach((u) => {
+      userMap.set(u.id, { id: u.id, name: u.name, planned: 0, achieved: 0, msTotal: 0, msDone: 0 })
+    })
+
+    indicadores.forEach((m: any) => {
+      const assigneeId = m.assigned_to ?? task.assigned_to
+      if (!assigneeId || !userMap.has(assigneeId)) return
+
+      const current = userMap.get(assigneeId)!
+      current.planned += m.planned_value ?? 0
+      current.achieved += m.achieved_value ?? 0
+      current.msTotal += 1
+      if (m.status === 'DONE') current.msDone += 1
+    })
+
+    return Array.from(userMap.values())
+      .map((worker) => {
+        const executionScore = worker.planned > 0 ? Math.min(100, (worker.achieved / worker.planned) * 100) : 0
+        const totalScore = Number(executionScore.toFixed(1))
+        return {
+          ...worker,
+          totalScore,
+          trafficLight: getTrafficLight(totalScore),
+        }
+      })
+      .sort((a, b) =>
+        b.totalScore - a.totalScore ||
+        b.msDone - a.msDone ||
+        b.msTotal - a.msTotal ||
+        a.name.localeCompare(b.name),
+      )
+      .map((worker, index) => ({ ...worker, rank: index + 1 }))
+  }, [deptUsers, indicadores, task?.assigned_to, task?.owner_type])
+
+  if (isLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>
+  if (!task) return <div style={{ padding: 40 }}>Acção não encontrada.</div>
 
   const resetMilestoneForm = () => {
     setMsTitle('')
@@ -501,11 +574,18 @@ export default function TaskDetailPage() {
           </>
         }
         actions={
-          can('create:task') && (
-            <Button variant="secondary" icon={<Pencil size={14} />} onClick={() => setEditModal(true)}>
-              Editar
-            </Button>
-          )
+          <div style={{ display: 'flex', gap: 8 }}>
+            {can('create:task') && (
+              <Button variant="secondary" icon={<Pencil size={14} />} onClick={() => setEditModal(true)}>
+                Editar
+              </Button>
+            )}
+            {(user?.role === 'ADMIN' || user?.role === 'CA') && (
+              <Button variant="danger" icon={<Trash2 size={14} />} onClick={() => setDeleteModal(true)}>
+                Eliminar
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -567,6 +647,10 @@ export default function TaskDetailPage() {
         { key: 'forecast', label: 'Previsão' },
         { key: 'blockers', label: `Impedimentos (${blockers.length})` },
         { key: 'scopes', label: 'Âmbito' },
+        ...(task.owner_type === 'DEPARTAMENTO' && deptUsers.length > 0
+          ? [{ key: 'collaborators', label: `Colaboradores (${workerRanking.length})` }]
+          : []),
+        { key: 'history', label: 'Histórico' },
       ]}>
         {(activeTab) => {
           if (activeTab === 'indicadores') return (
@@ -593,6 +677,7 @@ export default function TaskDetailPage() {
                     hasPhoto={!!m.photo_url}
                     notes={m.notes}
                     assigneeName={m.assignee?.name}
+                    onViewDetails={() => setDetailMsId(m.id)}
                     onUpdate={can('update:milestone') && m.status !== 'DONE' ? () => setProgressMs(m) : undefined}
                     onEdit={can('update:milestone') ? () => openEditMilestone(m) : undefined}
                   />
@@ -712,9 +797,86 @@ export default function TaskDetailPage() {
               </div>
             )
           }
+
+          if (activeTab === 'collaborators') {
+            return (
+              <Card variant="elevated">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <Trophy size={15} style={{ color: 'var(--color-primary)' }} />
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Ranking de Técnicos da Acção
+                  </p>
+                  <Badge variant="default" style={{ marginLeft: 4 }}>{workerRanking.length}</Badge>
+                </div>
+
+                {workerRanking.length === 0 ? (
+                  <div style={{ padding: '24px 0', textAlign: 'center' }}>
+                    <Trophy size={28} style={{ color: 'var(--color-text-muted)', opacity: 0.3, marginBottom: 8 }} />
+                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Sem técnicos para rankear nesta acção.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {workerRanking.map((worker, idx) => {
+                      const ec = TL_COLORS[worker.trafficLight]
+                      const medal = ['🥇', '🥈', '🥉'][idx] ?? null
+                      return (
+                        <div key={worker.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 12,
+                          padding: '10px 14px', borderRadius: 10,
+                          background: idx === 0 ? 'var(--color-traffic-green-bg)' : 'var(--color-bg-strong)',
+                          border: `1px solid ${idx === 0 ? 'var(--color-traffic-green)' : 'transparent'}`,
+                        }}>
+                          <span style={{ fontSize: 18, flexShrink: 0, width: 24, textAlign: 'center' }}>
+                            {medal ?? <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)' }}>#{worker.rank}</span>}
+                          </span>
+                          <div style={{
+                            width: 32, height: 32, borderRadius: '50%',
+                            background: 'var(--color-primary)', color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 13, fontWeight: 800, flexShrink: 0,
+                          }}>
+                            {(worker.name ?? '?').charAt(0).toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{worker.name}</p>
+                            <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                              {worker.msDone}/{worker.msTotal} marcos concluídos
+                            </p>
+                          </div>
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <p style={{ fontSize: 16, fontWeight: 900, color: ec.text, lineHeight: 1 }}>
+                              {worker.totalScore.toFixed(1)}
+                            </p>
+                            <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>/100</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </Card>
+            )
+          }
+
+          if (activeTab === 'history') return <HistoryTab entityType="task" entityId={task.id} valueLabel="Valor actual" />
+
           return null
         }}
       </Tabs>
+
+      {/* Delete Task Modal */}
+      <Modal open={deleteModal} onClose={() => setDeleteModal(false)} title="Eliminar acção"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeleteModal(false)}>Cancelar</Button>
+            <Button variant="danger" icon={<Trash2 size={13} />} onClick={() => deleteTask.mutate()} loading={deleteTask.isPending}>Eliminar</Button>
+          </>
+        }
+      >
+        <p style={{ fontSize: 14, color: 'var(--color-text)' }}>
+          Tem a certeza que pretende eliminar <b>{task.title}</b>? Esta acção não pode ser revertida e todos os indicadores associados serão eliminados.
+        </p>
+      </Modal>
 
       {/* Create Indicador Modal */}
       <Modal open={indicadorModal} onClose={() => setIndicadorModal(false)} title="Novo Indicador" width={540}
@@ -797,12 +959,25 @@ export default function TaskDetailPage() {
           goalLabel={task?.goal_label}
           onClose={() => setProgressMs(null)}
           onSuccess={() => {
+            const updatedMsId = progressMs?.id
             setProgressMs(null)
             qc.invalidateQueries({ queryKey: ['indicadores'] })
             qc.invalidateQueries({ queryKey: ['tasks', taskId] })
+            if (updatedMsId) {
+              qc.invalidateQueries({ queryKey: ['milestone-detail', updatedMsId] })
+              qc.invalidateQueries({ queryKey: ['milestone-progress', updatedMsId] })
+            }
           }}
         />
       )}
+
+      <MilestoneDetailModal
+        open={detailMsId !== null}
+        milestoneId={detailMsId}
+        onClose={() => setDetailMsId(null)}
+        fallbackMilestone={indicadores.find((m: any) => m.id === detailMsId) ?? null}
+        goalLabel={task?.goal_label}
+      />
 
       {/* Blocker modal */}
       <Modal open={!!blockerModal} onClose={() => setBlockerModal(null)} title="Reportar Impedimento" width={480}
@@ -827,32 +1002,41 @@ export default function TaskDetailPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditModal(false)}>Cancelar</Button>
-            <Button variant="primary" type="submit" form="edit-task-form" loading={updateTask.isPending}>Guardar</Button>
+            <Button variant="primary" type="submit" form="edit-task-form" loading={updateTask.isPending} disabled={!taskFormValid}>Guardar</Button>
           </>
         }
       >
         <TaskForm
           id="edit-task-form"
           projectId={task.project_id}
+          existingTaskId={task.id}
           onSubmit={payload => updateTask.mutate(payload)}
-          initialScopes={(task.scopes ?? []).map(s => ({
-            scope_type: s.scope_type as ScopeType,
-            scope_id:   s.scope_id ?? 0,
-            name:       s.scope_name ?? `#${s.scope_id}`,
-          }))}
+          onValidityChange={setTaskFormValid}
+          initialScopes={(task.scopes ?? []).map(s => {
+            let name = s.scope_name ?? ''
+            if (!name && s.scope_type === 'ASC') {
+              name = ascsData?.data?.find((a: any) => a.id === s.scope_id)?.name ?? `ASC #${s.scope_id}`
+            } else if (!name && s.scope_type === 'REGIAO') {
+              name = regioesData?.data?.find((r: any) => r.id === s.scope_id)?.name ?? `Região #${s.scope_id}`
+            } else if (!name && s.scope_type === 'NACIONAL') {
+              name = 'Nacional'
+            }
+            return { scope_type: s.scope_type as ScopeType, scope_id: s.scope_id ?? 0, name }
+          })}
           defaultValues={{
-            title:        task.title,
-            description:  task.description ?? '',
-            owner_type:   task.owner_type as any,
-            owner_id:     task.owner_id,
-            assigned_to:  task.assigned_to,
-            frequency:    task.frequency as any,
-            goal_label:   task.goal_label,
-            start_value:  task.start_value ?? 0,
-            target_value: task.target_value ?? 0,
-            weight:       task.weight ?? 100,
-            start_date:   task.start_date ? task.start_date.slice(0, 10) : '',
-            end_date:     task.end_date   ? task.end_date.slice(0, 10)   : '',
+            title:            task.title,
+            description:      task.description ?? '',
+            owner_type:       task.owner_type as any,
+            owner_id:         task.owner_id,
+            assigned_to:      task.assigned_to,
+            frequency:        task.frequency as any,
+            goal_label:       task.goal_label,
+            start_value:      task.start_value ?? 0,
+            target_value:     task.target_value ?? 0,
+            aggregation_type: (task as any).aggregation_type ?? 'SUM_UP',
+            weight:           task.weight ?? 100,
+            start_date:       task.start_date ? task.start_date.slice(0, 10) : '',
+            end_date:         task.end_date   ? task.end_date.slice(0, 10)   : '',
           }}
         />
       </Modal>

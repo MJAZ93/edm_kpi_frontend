@@ -1,9 +1,9 @@
 import api from './api'
-import type { Milestone, CreateMilestonePayload, UpdateMilestonePayload, PaginatedResponse } from '../types'
+import type { Milestone, MilestoneProgressEvent, CreateMilestonePayload, UpdateMilestonePayload, PaginatedResponse } from '../types'
 
 export const milestonesService = {
   list: (task_id: number) =>
-    api.get<PaginatedResponse<Milestone>>('/private/milestones', { params: { task_id } }).then(r => r.data),
+    api.get<PaginatedResponse<Milestone>>('/private/milestones', { params: { task_id, limit: 500 } }).then(r => r.data),
 
   get: (id: number) =>
     api.get<Milestone>(`/private/milestones/${id}`).then(r => r.data),
@@ -25,11 +25,11 @@ export const milestonesService = {
     }).then(r => r.data)
   },
 
-  addProgress: (id: number, payload: { increment_value: number; notes?: string; status?: string }) =>
+  addProgress: (id: number, payload: { increment_value: number; period_reference?: string; notes?: string; status?: string }) =>
     api.post<{ milestone: Milestone; progress_event: any; new_total: number }>(
       `/private/milestones/${id}/progress`, payload
     ).then(r => r.data),
 
   listProgress: (id: number) =>
-    api.get<{ events: any[]; total: number }>(`/private/milestones/${id}/progress`).then(r => r.data),
+    api.get<{ events: MilestoneProgressEvent[]; total: number }>(`/private/milestones/${id}/progress`).then(r => r.data),
 }

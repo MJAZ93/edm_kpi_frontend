@@ -1,19 +1,117 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useMemo } from 'react'
 import ReactDOM from 'react-dom'
-import { useMutation } from '@tanstack/react-query'
-import { X, Check, Plus, ArrowRight, Paperclip, Trash2, FileText } from 'lucide-react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { X, Check, Plus, ArrowRight, Paperclip, Trash2, FileText, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { milestonesService } from '../../services/milestones.service'
+import type { Frequency } from '../../types'
 import Spinner from '../ui/Spinner'
 
+// ── Period helpers ──────────────────────────────────────────────────────────
+
+const MONTH_NAMES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+const QUARTER_NAMES = ['1º Trimestre', '2º Trimestre', '3º Trimestre', '4º Trimestre']
+const SEMESTER_NAMES = ['1º Semestre', '2º Semestre']
+
+/** Generate period options based on frequency and current year */
+function buildPeriodOptions(frequency: Frequency | string | undefined): { value: string; label: string }[] {
+  const year = new Date().getFullYear()
+  switch (frequency) {
+    case 'MONTHLY':
+      return MONTH_NAMES.map((name, i) => ({
+        value: `${year}-${String(i + 1).padStart(2, '0')}`,
+        label: `${name} ${year}`,
+      }))
+    case 'QUARTERLY':
+      return QUARTER_NAMES.map((name, i) => ({
+        value: `${year}-Q${i + 1}`,
+        label: `${name} ${year}`,
+      }))
+    case 'BIANNUAL':
+      return SEMESTER_NAMES.map((name, i) => ({
+        value: `${year}-S${i + 1}`,
+        label: `${name} ${year}`,
+      }))
+    case 'ANNUAL':
+      return [
+        { value: `${year - 1}`, label: `${year - 1}` },
+        { value: `${year}`, label: `${year}` },
+      ]
+    case 'WEEKLY': {
+      // Show last 8 weeks + next 4 weeks
+      const opts: { value: string; label: string }[] = []
+      const now = new Date()
+      for (let w = -8; w <= 4; w++) {
+        const d = new Date(now)
+        d.setDate(d.getDate() + w * 7)
+        const weekStart = new Date(d)
+        weekStart.setDate(d.getDate() - d.getDay() + 1) // Monday
+        const iso = weekStart.toISOString().slice(0, 10)
+        const weekNum = getWeekNumber(weekStart)
+        opts.push({
+          value: `${weekStart.getFullYear()}-W${String(weekNum).padStart(2, '0')}`,
+          label: `Semana ${weekNum} (${weekStart.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit' })})`,
+        })
+      }
+      return opts
+    }
+    case 'DAILY':
+    default:
+      return [] // No period selector for daily or unknown
+  }
+}
+
+function getWeekNumber(d: Date): number {
+  const oneJan = new Date(d.getFullYear(), 0, 1)
+  return Math.ceil(((d.getTime() - oneJan.getTime()) / 86400000 + oneJan.getDay() + 1) / 7)
+}
+
+/** Human-readable period label from reference like "2026-03", "2026-Q1", etc. */
+export function periodLabel(ref: string): string {
+  if (!ref) return ''
+  // Monthly: "2026-03" → "Março 2026"
+  const monthly = ref.match(/^(\d{4})-(\d{2})$/)
+  if (monthly) {
+    const [, y, m] = monthly
+    return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`
+  }
+  // Quarterly: "2026-Q2"
+  const quarterly = ref.match(/^(\d{4})-Q(\d)$/)
+  if (quarterly) {
+    const [, y, q] = quarterly
+    return `${QUARTER_NAMES[parseInt(q, 10) - 1]} ${y}`
+  }
+  // Biannual: "2026-S1"
+  const biannual = ref.match(/^(\d{4})-S(\d)$/)
+  if (biannual) {
+    const [, y, s] = biannual
+    return `${SEMESTER_NAMES[parseInt(s, 10) - 1]} ${y}`
+  }
+  // Weekly: "2026-W12"
+  const weekly = ref.match(/^(\d{4})-W(\d{2})$/)
+  if (weekly) {
+    const [, y, w] = weekly
+    return `Semana ${parseInt(w, 10)} de ${y}`
+  }
+  // Annual or fallback
+  return ref
+}
+
+// ── Component ───────────────────────────────────────────────────────────────
+
 interface ProgressModalProps {
-  /** Full indicador object (or at minimum: id, title, achieved_value, planned_value, status) */
+  /** Full indicador object (or at minimum: id, title, achieved_value, planned_value, status, frequency) */
   ms: {
     id: number
     title: string
     achieved_value?: number
     planned_value?: number
     status?: string
+    frequency?: string
   }
   /** Label for the unit (e.g. "Inspecções Realizadas") — shown next to value fields */
   goalLabel?: string
@@ -23,11 +121,30 @@ interface ProgressModalProps {
 
 export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: ProgressModalProps) {
   const [increment, setIncrement] = useState('')
+  const [period, setPeriod]       = useState('')
   const [status, setStatus]       = useState<string>(ms.status === 'DONE' ? 'DONE' : 'PENDING')
   const [notes, setNotes]         = useState('')
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Fetch existing progress events to know which periods are already recorded
+  const { data: existingProgress } = useQuery({
+    queryKey: ['milestone-progress', ms.id],
+    queryFn: () => milestonesService.listProgress(ms.id),
+    enabled: ms.id > 0,
+  })
+
+  const usedPeriods = useMemo(() => {
+    const set = new Set<string>()
+    existingProgress?.events?.forEach(e => {
+      if (e.period_reference) set.add(e.period_reference)
+    })
+    return set
+  }, [existingProgress])
+
+  const periodOptions = useMemo(() => buildPeriodOptions(ms.frequency), [ms.frequency])
+  const hasPeriodSelector = periodOptions.length > 0
 
   const incNum    = parseFloat(increment) || 0
   const current   = ms.achieved_value ?? 0
@@ -71,6 +188,7 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
   const progressMut = useMutation({
     mutationFn: () => milestonesService.addProgress(ms.id, {
       increment_value: incNum,
+      period_reference: period || undefined,
       notes,
       status,
     }),
@@ -82,10 +200,18 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
         onSuccess()
       }
     },
-    onError: () => toast.error('Erro ao registar progresso.'),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message
+      if (msg) {
+        toast.error(msg)
+      } else {
+        toast.error('Erro ao registar progresso.')
+      }
+    },
   })
 
   const isPending = progressMut.isPending || uploadMut.isPending
+  const canSubmit = incNum > 0 && (!hasPeriodSelector || period !== '')
 
   return ReactDOM.createPortal(
     <div
@@ -122,6 +248,48 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
             ))}
           </div>
 
+          {/* ── Period selector ───────────────────────────────────────────── */}
+          {hasPeriodSelector && (
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                <Calendar size={12} />
+                Período de Referência
+              </label>
+              <select
+                value={period}
+                onChange={e => setPeriod(e.target.value)}
+                style={{
+                  width: '100%', padding: '10px 14px',
+                  border: '1.5px solid var(--color-border-strong)', borderRadius: 12,
+                  fontSize: 14, fontWeight: 700,
+                  background: 'var(--color-surface-strong)', color: period ? 'var(--color-text)' : 'var(--color-text-muted)',
+                  outline: 'none', boxSizing: 'border-box', cursor: 'pointer',
+                  appearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 14px center',
+                }}
+                onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-primary)')}
+                onBlur={e  => (e.currentTarget.style.borderColor = 'var(--color-border-strong)')}
+              >
+                <option value="">Seleccione o período…</option>
+                {periodOptions.map(opt => {
+                  const used = usedPeriods.has(opt.value)
+                  return (
+                    <option key={opt.value} value={opt.value} disabled={used}>
+                      {opt.label}{used ? ' ✓ (já registado)' : ''}
+                    </option>
+                  )
+                })}
+              </select>
+              {period && usedPeriods.has(period) && (
+                <p style={{ fontSize: 11, color: 'var(--color-traffic-red)', fontWeight: 600, marginTop: 4 }}>
+                  Este período já tem registo. Seleccione outro.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* ── Increment input ───────────────────────────────────────────── */}
           <div>
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>
@@ -130,10 +298,11 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
             <input
               type="number"
               min={0}
+              step="any"
               value={increment}
               onChange={e => setIncrement(e.target.value)}
               placeholder="Ex: 3000"
-              autoFocus
+              autoFocus={!hasPeriodSelector}
               style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--color-border-strong)', borderRadius: 12, fontSize: 16, fontWeight: 700, background: 'var(--color-surface-strong)', color: 'var(--color-text)', outline: 'none', boxSizing: 'border-box' }}
               onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-primary)')}
               onBlur={e  => (e.currentTarget.style.borderColor = 'var(--color-border-strong)')}
@@ -264,8 +433,8 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
           </button>
           <button
             onClick={() => progressMut.mutate()}
-            disabled={incNum <= 0 || isPending}
-            style={{ padding: '9px 22px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: incNum <= 0 ? 'not-allowed' : 'pointer', background: incNum <= 0 ? 'var(--color-border)' : 'var(--color-primary)', border: 'none', color: incNum <= 0 ? 'var(--color-text-muted)' : '#fff', display: 'flex', alignItems: 'center', gap: 6, opacity: isPending ? 0.7 : 1, transition: 'background 150ms' }}
+            disabled={!canSubmit || isPending}
+            style={{ padding: '9px 22px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: !canSubmit ? 'not-allowed' : 'pointer', background: !canSubmit ? 'var(--color-border)' : 'var(--color-primary)', border: 'none', color: !canSubmit ? 'var(--color-text-muted)' : '#fff', display: 'flex', alignItems: 'center', gap: 6, opacity: isPending ? 0.7 : 1, transition: 'background 150ms' }}
           >
             {isPending ? <Spinner size="sm" /> : <Check size={14} />}
             {photoFile ? 'Guardar com Comprovativo' : 'Registar Progresso'}
