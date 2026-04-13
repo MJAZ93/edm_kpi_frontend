@@ -26,9 +26,9 @@ const CONFIG = {
 }
 
 function useEntityData(type: EntityType) {
-  const pelouros    = useQuery({ queryKey: ['pelouros'],     queryFn: orgService.listPelouros,     enabled: type === 'pelouro' })
-  const direcoes    = useQuery({ queryKey: ['direcoes'],     queryFn: orgService.listDirecoes,     enabled: type === 'direcao' })
-  const departamentos = useQuery({ queryKey: ['departamentos'], queryFn: orgService.listDepartamentos, enabled: type === 'departamento' })
+  const pelouros    = useQuery({ queryKey: ['pelouros'],     queryFn: orgService.listPelouros,     staleTime: Infinity, enabled: type === 'pelouro' })
+  const direcoes    = useQuery({ queryKey: ['direcoes'],     queryFn: orgService.listDirecoes,     staleTime: Infinity, enabled: type === 'direcao' })
+  const departamentos = useQuery({ queryKey: ['departamentos'], queryFn: orgService.listDepartamentos, staleTime: Infinity, enabled: type === 'departamento' })
   if (type === 'pelouro')      return { data: pelouros.data?.data ?? [], isLoading: pelouros.isLoading }
   if (type === 'direcao')      return { data: direcoes.data?.data ?? [], isLoading: direcoes.isLoading }
   return { data: departamentos.data?.data ?? [], isLoading: departamentos.isLoading }
@@ -48,8 +48,8 @@ export default function OrgEntityPage({ type }: Props) {
   const [parentId, setParentId] = useState('')
   const [addUserId, setAddUserId] = useState<number | null>(null)
 
-  const { data: pelouros } = useQuery({ queryKey: ['pelouros'], queryFn: orgService.listPelouros, enabled: type === 'direcao' })
-  const { data: direcoes } = useQuery({ queryKey: ['direcoes'], queryFn: orgService.listDirecoes, enabled: type === 'departamento' })
+  const { data: pelouros } = useQuery({ queryKey: ['pelouros'], queryFn: orgService.listPelouros, staleTime: Infinity, enabled: type === 'direcao' })
+  const { data: direcoes } = useQuery({ queryKey: ['direcoes'], queryFn: orgService.listDirecoes, staleTime: Infinity, enabled: type === 'departamento' })
 
   // Pre-fetch users so UserCombobox has warm cache when modal opens
   useQuery({ queryKey: ['users', { limit: 200 }], queryFn: () => usersService.list({ limit: 200 }) })

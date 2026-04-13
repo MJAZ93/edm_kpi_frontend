@@ -115,11 +115,13 @@ interface ProgressModalProps {
   }
   /** Label for the unit (e.g. "Inspecções Realizadas") — shown next to value fields */
   goalLabel?: string
+  /** When true, lower values = better (e.g. losses, defects) */
+  isReduction?: boolean
   onClose: () => void
   onSuccess: () => void
 }
 
-export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: ProgressModalProps) {
+export default function ProgressModal({ ms, goalLabel, isReduction, onClose, onSuccess }: ProgressModalProps) {
   const [increment, setIncrement] = useState('')
   const [period, setPeriod]       = useState('')
   const [status, setStatus]       = useState<string>(ms.status === 'DONE' ? 'DONE' : 'PENDING')
@@ -149,9 +151,15 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
   const incNum    = parseFloat(increment) || 0
   const current   = ms.achieved_value ?? 0
   const planned   = ms.planned_value  ?? 0
-  const remaining = Math.max(0, planned - current)
+  const remaining = isReduction
+    ? Math.max(0, current - planned)   // reduction: how much we still need to reduce
+    : Math.max(0, planned - current)   // growth: how much we still need to grow
   const newTotal  = current + incNum
-  const pct       = planned > 0 ? Math.min(100, (newTotal / planned) * 100) : 0
+  const pct       = planned > 0
+    ? isReduction
+      ? Math.min(100, (planned / newTotal) * 100)   // lower total → closer to 100%
+      : Math.min(100, (newTotal / planned) * 100)
+    : 0
   const labelUnit = goalLabel || 'Valor'
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,8 +245,8 @@ export default function ProgressModal({ ms, goalLabel, onClose, onSuccess }: Pro
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             {[
               { label: 'Realizado',  val: current,   color: 'var(--color-primary)' },
-              { label: 'Planeado',   val: planned,   color: 'var(--color-text-muted)' },
-              { label: 'Em Falta',   val: remaining, color: remaining > 0 ? 'var(--color-traffic-yellow)' : 'var(--color-traffic-green)' },
+              { label: isReduction ? 'Alvo' : 'Planeado',   val: planned,   color: 'var(--color-text-muted)' },
+              { label: isReduction ? 'A Reduzir' : 'Em Falta',   val: remaining, color: remaining > 0 ? 'var(--color-traffic-yellow)' : 'var(--color-traffic-green)' },
             ].map(item => (
               <div key={item.label} style={{ padding: '10px 12px', background: 'var(--color-bg-strong)', borderRadius: 12, textAlign: 'center', border: '1px solid var(--color-border)' }}>
                 <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{item.label}</p>

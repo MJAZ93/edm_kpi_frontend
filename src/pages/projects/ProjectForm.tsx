@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, X } from 'lucide-react'
 import Input from '../../components/ui/Input'
 import Textarea from '../../components/ui/Textarea'
@@ -10,7 +10,6 @@ import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import DatePicker from '../../components/ui/DatePicker'
 import SearchableSelect from '../../components/ui/SearchableSelect'
-import { orgService } from '../../services/org.service'
 import { projectsService } from '../../services/projects.service'
 import { useAuth } from '../../hooks/useAuth'
 import type { CreateProjectPayload } from '../../types'
@@ -74,11 +73,9 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
   const [pendingDirecaoId, setPendingDirecaoId] = useState('')
   const [direcaoIdsInit, setDirecaoIdsInit] = useState(false)
 
-  const { data: direoesData } = useQuery({
-    queryKey: ['direcoes'],
-    queryFn: () => orgService.listDirecoes(),
-    enabled: showDirecoes || showSingleDirecao,
-  })
+  // Direcoes — read-only from cache (populated by AppShell)
+  const qcRef = useQueryClient()
+  const direoesData = qcRef.getQueryData<any>(['direcoes'])
 
   const { data: parentProjects } = useQuery({
     queryKey: ['projects', { status: 'ACTIVE' }],
@@ -98,7 +95,7 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
     setDirecaoIdsInit(true)
   }, [direoesData, initialDirecaoIds, direcaoIdsInit])
 
-  const direcaoOptions = direoesData?.data?.map(d => ({ value: String(d.id), label: d.name })) ?? []
+  const direcaoOptions = direoesData?.data?.map((d: any) => ({ value: String(d.id), label: d.name })) ?? []
 
   const parentOpts = [
     { value: '', label: 'Nenhum (pilar estratégico raiz)' },
@@ -109,7 +106,7 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
     if (!pendingDirecaoId) return
     const id = Number(pendingDirecaoId)
     if (selectedDirecoes.find(d => d.id === id)) return
-    const name = direoesData?.data?.find(d => d.id === id)?.name ?? `Direcção #${id}`
+    const name = direoesData?.data?.find((d: any) => d.id === id)?.name ?? `Direcção #${id}`
     setSelectedDirecoes(prev => [...prev, { id, name }])
     setPendingDirecaoId('')
   }
@@ -171,7 +168,7 @@ export default function ProjectForm({ id, onSubmit, defaultValues, initialDireca
           label="Direcção"
           options={[
             { value: '', label: 'Seleccionar direcção…' },
-            ...(direoesData?.data?.map(d => ({ value: String(d.id), label: d.name })) ?? []),
+            ...(direoesData?.data?.map((d: any) => ({ value: String(d.id), label: d.name })) ?? []),
           ]}
           value={creatorOrgIdVal ?? ''}
           onChange={val => setValue('creator_org_id', val)}

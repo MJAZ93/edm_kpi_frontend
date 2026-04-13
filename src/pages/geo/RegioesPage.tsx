@@ -26,7 +26,12 @@ export default function RegioesPage() {
   const [respId, setRespId] = useState<number | null>(null)
   const [polygon, setPolygon] = useState<{ type: string; coordinates: any } | null>(null)
 
-  const { data, isLoading } = useQuery({ queryKey: ['regioes'], queryFn: geoService.listRegioes })
+  // Read polygon data from cache (prefetched at login, persisted in IndexedDB)
+  const { data, isLoading } = useQuery({
+    queryKey: ['geo', 'regioes', 'polygon'],
+    queryFn: () => geoService.listRegioes({ includePolygon: true }),
+    staleTime: Infinity,
+  })
   const items = data?.data ?? []
 
   const open = (mode: typeof modal, item?: Regiao) => {
@@ -43,7 +48,7 @@ export default function RegioesPage() {
       name, code, responsible_id: respId!,
       polygon: polygon as any ?? undefined,
     }),
-    onSuccess: () => { toast.success('Região criada.'); qc.invalidateQueries({ queryKey: ['regioes'] }); setModal(null) },
+    onSuccess: () => { toast.success('Região criada.'); qc.invalidateQueries({ queryKey: ['geo', 'regioes'] }); setModal(null) },
     onError: () => toast.error('Erro ao criar.'),
   })
 
@@ -52,13 +57,13 @@ export default function RegioesPage() {
       name, code, responsible_id: respId!,
       polygon: polygon as any ?? undefined,
     }),
-    onSuccess: () => { toast.success('Região actualizada.'); qc.invalidateQueries({ queryKey: ['regioes'] }); setModal(null) },
+    onSuccess: () => { toast.success('Região actualizada.'); qc.invalidateQueries({ queryKey: ['geo', 'regioes'] }); setModal(null) },
     onError: () => toast.error('Erro ao actualizar.'),
   })
 
   const deleteMut = useMutation({
     mutationFn: () => geoService.deleteRegiao(selected!.id),
-    onSuccess: () => { toast.success('Região eliminada.'); qc.invalidateQueries({ queryKey: ['regioes'] }); setModal(null) },
+    onSuccess: () => { toast.success('Região eliminada.'); qc.invalidateQueries({ queryKey: ['geo', 'regioes'] }); setModal(null) },
     onError: () => toast.error('Erro ao eliminar.'),
   })
 

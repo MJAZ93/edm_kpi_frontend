@@ -143,7 +143,7 @@ export interface TaskScope {
   scope_name?: string
 }
 
-export type AggregationType = 'SUM_UP' | 'SUM_DOWN' | 'AVG'
+export type AggregationType = 'SUM_UP' | 'SUM_DOWN' | 'AVG' | 'LAST'
 
 export interface Task {
   id: number
@@ -419,7 +419,8 @@ export interface ScopeStatsResponse {
 
 export interface Notification {
   id: number
-  type: 'DELAY' | 'MILESTONE_OVERDUE' | 'BLOCKER_CREATED' | 'GOAL_AT_RISK' | 'UPDATE'
+  title: string
+  type: 'DELAY' | 'MILESTONE_OVERDUE' | 'BLOCKER_CREATED' | 'GOAL_AT_RISK' | 'UPDATE' | 'TASK_UPDATE' | 'MILESTONE_UPDATE' | 'BLOCKER_RESOLVED' | 'FORECAST_RISK'
   message: string
   is_read: boolean
   entity_type?: string

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, X, FileText, Users, Target, CalendarDays, MapPin } from 'lucide-react'
 import Input from '../../components/ui/Input'
 import SearchableSelect from '../../components/ui/SearchableSelect'
@@ -12,7 +12,6 @@ import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import Avatar from '../../components/ui/Avatar'
 import DatePicker from '../../components/ui/DatePicker'
-import { geoService } from '../../services/geo.service'
 import { orgService } from '../../services/org.service'
 import { tasksService } from '../../services/tasks.service'
 import { useAuth } from '../../hooks/useAuth'
@@ -27,7 +26,7 @@ const schema = z.object({
   goal_label:       z.string().min(2),
   start_value:      z.coerce.number(),
   target_value:     z.coerce.number(),
-  aggregation_type: z.enum(['SUM_UP', 'SUM_DOWN', 'AVG']).default('SUM_UP'),
+  aggregation_type: z.enum(['SUM_UP', 'SUM_DOWN', 'AVG', 'LAST']).default('SUM_UP'),
   weight:           z.coerce.number().min(0).max(100),
   start_date:       z.string().min(1),
   end_date:         z.string().min(1),
@@ -61,6 +60,7 @@ const AGG_TYPE_OPTS = [
   { value: 'SUM_UP',   label: 'Crescente acumulativo',   hint: 'Indicadores somam para atingir a meta' },
   { value: 'SUM_DOWN', label: 'Decrescente acumulativo', hint: 'Indicadores reduzem a partir do valor inicial' },
   { value: 'AVG',      label: 'Média',                   hint: 'Média dos indicadores = valor da acção' },
+  { value: 'LAST',     label: 'Último valor',            hint: 'Último indicador actualizado define o valor da acção' },
 ]
 const SCOPE_TYPE_OPTS = [
   { value: 'ASC',     label: 'ASC'     },
@@ -127,21 +127,12 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
   }, 0)
   const availableMax = Math.max(0, 100 - usedWeight)
 
-  // Geo data
-  const { data: ascs }    = useQuery({ queryKey: ['geo', 'ascs'],    queryFn: () => geoService.listAscs()    })
-  const { data: regioes } = useQuery({ queryKey: ['geo', 'regioes'], queryFn: () => geoService.listRegioes() })
-
-  // Departments
-  const { data: deptsData } = useQuery({
-    queryKey: ['departamentos'],
-    queryFn:  () => orgService.listDepartamentos(),
-  })
-
-  // Direcções
-  const { data: direoesData } = useQuery({
-    queryKey: ['direcoes'],
-    queryFn:  () => orgService.listDirecoes(),
-  })
+  // Geo & org data — read-only from cache (populated by AppShell)
+  const qcRef = useQueryClient()
+  const ascs       = qcRef.getQueryData<any>(['geo', 'ascs'])
+  const regioes    = qcRef.getQueryData<any>(['geo', 'regioes'])
+  const deptsData  = qcRef.getQueryData<any>(['departamentos'])
+  const direoesData = qcRef.getQueryData<any>(['direcoes'])
 
   const depts   = deptsData?.data   ?? []
   const direcoes = direoesData?.data ?? []
@@ -150,10 +141,10 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
 
   const deptOptions = [
     { value: '', label: 'Seleccionar departamento…' },
-    ...depts.map(d => ({ value: String(d.id), label: d.name })),
+    ...depts.map((d: any) => ({ value: String(d.id), label: d.name })),
   ]
 
-  const selectedDept = depts.find(d => String(d.id) === selectedDepartmentId) ?? null
+  const selectedDept = depts.find((d: any) => String(d.id) === selectedDepartmentId) ?? null
 
   const { data: selectedDeptData, isFetching: isDeptUsersLoading } = useQuery({
     queryKey: ['departamentos', selectedDepartmentId, 'detail'],
@@ -214,12 +205,12 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
     if (type === 'DIRECAO') {
       return [
         { value: '', label: 'Seleccionar direcção…' },
-        ...direcoes.map(d => ({ value: String(d.id), label: d.name })),
+        ...direcoes.map((d: any) => ({ value: String(d.id), label: d.name })),
       ]
     }
     return [
       { value: '', label: 'Seleccionar departamento…' },
-      ...depts.map(d => ({ value: String(d.id), label: d.name })),
+      ...depts.map((d: any) => ({ value: String(d.id), label: d.name })),
     ]
   }
 
@@ -240,8 +231,8 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
   const scopeOptions = scopeType === 'NACIONAL'
     ? []
     : scopeType === 'ASC'
-      ? ascs?.data?.map(a => ({ value: String(a.id), label: a.name })) ?? []
-      : regioes?.data?.map(r => ({ value: String(r.id), label: r.name })) ?? []
+      ? ascs?.data?.map((a: any) => ({ value: String(a.id), label: a.name })) ?? []
+      : regioes?.data?.map((r: any) => ({ value: String(r.id), label: r.name })) ?? []
 
   const addScope = () => {
     if (scopeType === 'NACIONAL') {
@@ -251,7 +242,7 @@ export default function TaskForm({ id, projectId, onSubmit, defaultValues, initi
       return
     }
     if (!scopeId) return
-    const name = scopeOptions.find(o => o.value === scopeId)?.label ?? scopeId
+    const name = scopeOptions.find((o: any) => o.value === scopeId)?.label ?? scopeId
     if (!scopes.find(s => s.scope_type === scopeType && String(s.scope_id) === scopeId)) {
       setScopes(s => [...s, { scope_type: scopeType, scope_id: Number(scopeId), name }])
     }

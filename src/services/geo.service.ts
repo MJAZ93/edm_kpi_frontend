@@ -3,8 +3,10 @@ import type { Regiao, ASC, PaginatedResponse, GeoPolygon } from '../types'
 
 export const geoService = {
   // Regiões
-  listRegioes: () =>
-    api.get<PaginatedResponse<Regiao>>('/private/geo/regioes').then(r => r.data),
+  listRegioes: (opts?: { includePolygon?: boolean }) =>
+    api.get<PaginatedResponse<Regiao>>('/private/geo/regioes', {
+      params: opts?.includePolygon ? { include_polygon: 'true' } : undefined,
+    }).then(r => r.data),
   getRegiao: (id: number) =>
     api.get<Regiao>(`/private/geo/regioes/${id}`).then(r => r.data),
   createRegiao: (payload: { name: string; code: string; responsible_id: number; polygon?: GeoPolygon }) =>
@@ -15,8 +17,10 @@ export const geoService = {
     api.delete(`/private/geo/regioes/${id}`).then(r => r.data),
 
   // ASCs
-  listAscs: () =>
-    api.get<PaginatedResponse<ASC>>('/private/geo/ascs').then(r => r.data),
+  listAscs: (opts?: { includePolygon?: boolean }) =>
+    api.get<PaginatedResponse<ASC>>('/private/geo/ascs', {
+      params: opts?.includePolygon ? { include_polygon: 'true' } : undefined,
+    }).then(r => r.data),
   getAsc: (id: number) =>
     api.get<ASC>(`/private/geo/ascs/${id}`).then(r => r.data),
   createAsc: (payload: { name: string; code: string; regiao_id: number; responsible_id: number; director_id?: number; polygon?: GeoPolygon }) =>

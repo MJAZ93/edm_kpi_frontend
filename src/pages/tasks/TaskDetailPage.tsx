@@ -101,6 +101,8 @@ interface IndicadorFormProps {
   taskEndDate?: string     // YYYY-MM-DD
   taskTargetValue?: number
   taskTotalPlanned?: number  // sum of already-created indicadores
+  taskAggType?: string       // SUM_UP, SUM_DOWN, AVG
+  isReduction?: boolean      // target < start (lower = better)
 }
 
 const FREQ_OPTS = [
@@ -112,7 +114,7 @@ const FREQ_OPTS = [
   { value: 'ANNUAL', label: 'Anual' },
 ]
 
-function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msScopeId, setMsScopeId, msFrequency, setMsFrequency, msPlanned, setMsPlanned, msDate, setMsDate, msNotes, setMsNotes, ascs, regioes, goalLabel, deptUsers, msAssignedTo, setMsAssignedTo, currentUserId, taskStartDate, taskEndDate, taskTargetValue, taskTotalPlanned }: IndicadorFormProps) {
+function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msScopeId, setMsScopeId, msFrequency, setMsFrequency, msPlanned, setMsPlanned, msDate, setMsDate, msNotes, setMsNotes, ascs, regioes, goalLabel, deptUsers, msAssignedTo, setMsAssignedTo, currentUserId, taskStartDate, taskEndDate, taskTargetValue, taskTotalPlanned, taskAggType, isReduction }: IndicadorFormProps) {
   const scopeEntityOptions = msScopeType === 'ASC'
     ? ascs.map(a => ({ value: String(a.id), label: a.name }))
     : msScopeType === 'REGIAO'
@@ -179,9 +181,41 @@ function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
 
         {/* Task target context banner */}
         {taskTargetValue !== undefined && taskTotalPlanned !== undefined && (() => {
+          const isAvg = taskAggType === 'AVG'
+          const thisVal = Number(msPlanned) || 0
+
+          // AVG mode: each indicator has its own target (= task target). No SUM distribution.
+          if (isAvg) {
+            const matchesTarget = thisVal > 0 && Math.abs(thisVal - taskTargetValue) < 0.01
+            return (
+              <div style={{ padding: '10px 14px', background: 'var(--color-surface-muted)', borderRadius: 10, border: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {isReduction ? 'Alvo mensal (redução)' : 'Alvo mensal da acção'}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)' }}>{taskTargetValue.toLocaleString('pt-PT')} {goalLabel ?? ''}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)' }}>Agregação</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)' }}>Média {isReduction ? '(menor = melhor)' : ''}</span>
+                </div>
+                {thisVal > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: matchesTarget ? 'var(--color-traffic-green)' : 'var(--color-text-muted)' }}>
+                      Valor deste indicador
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: matchesTarget ? 'var(--color-traffic-green)' : 'var(--color-primary)' }}>
+                      {thisVal.toLocaleString('pt-PT')} {matchesTarget ? '✓' : ''}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          // SUM mode: distribute target across indicators
           const alreadyPlanned = taskTotalPlanned
           const remaining = taskTargetValue - alreadyPlanned
-          const thisVal   = Number(msPlanned) || 0
           const afterThis = alreadyPlanned + thisVal
           const afterPct  = taskTargetValue > 0 ? (afterThis / taskTargetValue) * 100 : 0
           const overTarget = afterThis > taskTargetValue
@@ -213,10 +247,10 @@ function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
                   <div style={{ height: 1, background: 'var(--color-border)', margin: '2px 0' }} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: overTarget ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
-                      {overTarget ? '🚀 Com este indicador' : 'Com este indicador'}
+                      Com este indicador
                     </span>
                     <span style={{ fontSize: 12, fontWeight: 800, color: overTarget ? 'var(--color-primary)' : 'var(--color-traffic-green)' }}>
-                      {afterThis.toLocaleString('pt-PT')} ({afterPct.toFixed(0)}%{overTarget ? ' — acima do objectivo, é permitido' : ''})
+                      {afterThis.toLocaleString('pt-PT')} ({afterPct.toFixed(0)}%)
                     </span>
                   </div>
                   {/* Mini progress bar */}
@@ -339,9 +373,15 @@ export default function TaskDetailPage() {
     enabled: !!taskId,
   })
 
-  // Geo data for indicador scope picker
-  const { data: ascsData }    = useQuery({ queryKey: ['geo', 'ascs'],    queryFn: () => geoService.listAscs()    })
-  const { data: regioesData } = useQuery({ queryKey: ['geo', 'regioes'], queryFn: () => geoService.listRegioes() })
+  // Geo data — light (names only) for scope picker; full (with polygons) for map
+  // Geo data — read-only from cache (populated by AppShell)
+  const qcRef = useQueryClient()
+  const ascsData    = qcRef.getQueryData<any>(['geo', 'ascs'])
+  const regioesData = qcRef.getQueryData<any>(['geo', 'regioes'])
+  const [activeTab, setActiveTab] = useState('indicadores')
+  const needsPolygon = activeTab === 'scopes'
+  const { data: ascsGeo }     = useQuery({ queryKey: ['geo', 'ascs', 'polygon'],    queryFn: () => geoService.listAscs({ includePolygon: true }), staleTime: Infinity, enabled: needsPolygon    })
+  const { data: regioesGeo }  = useQuery({ queryKey: ['geo', 'regioes', 'polygon'], queryFn: () => geoService.listRegioes({ includePolygon: true }), staleTime: Infinity, enabled: needsPolygon })
 
   const { data: taskOwnerDept } = useQuery({
     queryKey: ['departamentos', task?.owner_id, 'task-owner'],
@@ -369,7 +409,7 @@ export default function TaskDetailPage() {
 
   const updateTask = useMutation({
     mutationFn: (payload: Partial<CreateTaskPayload>) => tasksService.update(taskId, payload),
-    onSuccess: () => { toast.success('Acção actualizada.'); qc.invalidateQueries({ queryKey: ['tasks', taskId] }); setEditModal(false) },
+    onSuccess: () => { toast.success('Acção actualizada.'); qc.invalidateQueries({ queryKey: ['tasks', taskId] }); qc.invalidateQueries({ queryKey: ['indicadores'] }); setEditModal(false) },
     onError: () => toast.error('Erro ao actualizar acção.'),
   })
 
@@ -422,10 +462,18 @@ export default function TaskDetailPage() {
   const startVal = task?.start_value ?? 0
   const currentVal = task?.current_value ?? 0
   const targetVal = task?.target_value ?? 0
-  const pct = targetVal > startVal ? Math.min(100, ((currentVal - startVal) / (targetVal - startVal)) * 100) : 0
+  const goalDiff = targetVal - startVal
+  // Universal formula: works for growth (target > start) AND reduction (target < start)
+  // Allows negative progress when going opposite direction of target
+  const pct = goalDiff !== 0 ? Math.min(100, ((currentVal - startVal) / goalDiff) * 100) : 100
+  const isReduction = targetVal < startVal
 
   const totalPlanned = indicadores.reduce((sum: number, m: any) => sum + (m.planned_value ?? 0), 0)
-  const unassigned = Math.max(0, targetVal - totalPlanned)
+  const aggType = task?.aggregation_type ?? 'SUM_UP'
+  // For AVG tasks, check if each indicator's planned ≈ target; for SUM, check sum vs target
+  const unassigned = (aggType === 'AVG' || aggType === 'LAST')
+    ? 0  // AVG/LAST: each indicator has its own target, sum doesn't apply
+    : Math.max(0, targetVal - totalPlanned)
 
   const workerRanking = useMemo(() => {
     if (!task || task.owner_type !== 'DEPARTAMENTO' || deptUsers.length === 0) return []
@@ -456,7 +504,11 @@ export default function TaskDetailPage() {
 
     return Array.from(userMap.values())
       .map((worker) => {
-        const executionScore = worker.planned > 0 ? Math.min(100, (worker.achieved / worker.planned) * 100) : 0
+        const executionScore = worker.planned > 0
+          ? isReduction
+            ? Math.min(100, (worker.planned / worker.achieved) * 100)
+            : Math.min(100, (worker.achieved / worker.planned) * 100)
+          : 0
         const totalScore = Number(executionScore.toFixed(1))
         return {
           ...worker,
@@ -471,7 +523,7 @@ export default function TaskDetailPage() {
         a.name.localeCompare(b.name),
       )
       .map((worker, index) => ({ ...worker, rank: index + 1 }))
-  }, [deptUsers, indicadores, task?.assigned_to, task?.owner_type])
+  }, [deptUsers, indicadores, task?.assigned_to, task?.owner_type, isReduction])
 
   if (isLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>
   if (!task) return <div style={{ padding: 40 }}>Acção não encontrada.</div>
@@ -591,7 +643,18 @@ export default function TaskDetailPage() {
 
       {/* Goal tracker */}
       <Card variant="elevated" style={{ marginBottom: 20 }}>
-        <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>{task.goal_label}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{task.goal_label}</p>
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+            background: isReduction ? 'var(--color-traffic-red-bg)' : 'var(--color-traffic-green-bg)',
+            color: isReduction ? 'var(--color-traffic-red)' : 'var(--color-traffic-green)',
+            border: `1px solid ${isReduction ? 'rgba(220,38,38,0.2)' : 'rgba(22,163,74,0.2)'}`,
+            textTransform: 'uppercase', letterSpacing: '0.04em',
+          }}>
+            {isReduction ? '↓ Redução' : '↑ Crescimento'}
+          </span>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 12 }}>
           {[
             { l: 'Início', v: startVal },
@@ -608,22 +671,40 @@ export default function TaskDetailPage() {
             <p style={{ fontSize: 28, fontWeight: 800, color: pct >= 90 ? 'var(--color-traffic-green)' : pct >= 60 ? 'var(--color-traffic-yellow)' : 'var(--color-traffic-red)' }}>{pct.toFixed(1)}%</p>
           </div>
         </div>
-        <ProgressBar value={pct} variant="auto" height={10} showLabel />
+        <ProgressBar value={Math.max(0, pct)} variant="auto" height={10} showLabel={pct >= 0} />
+        {pct < 0 && (
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-traffic-red)', marginTop: 4 }}>
+            Progresso negativo — {isReduction ? 'o valor subiu' : 'o valor desceu'} em vez de {isReduction ? 'descer' : 'subir'}
+          </p>
+        )}
 
         {/* Indicador coverage hint */}
         {indicadores.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--color-border)', flexWrap: 'wrap', gap: 8 }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              <strong style={{ color: 'var(--color-text)' }}>{totalPlanned.toLocaleString('pt-PT')}</strong> atribuídos em indicadores
-            </span>
-            {unassigned > 0 ? (
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-traffic-red)' }}>
-                ⚠ {unassigned.toLocaleString('pt-PT')} por distribuir por indicadores
-              </span>
+            {(aggType === 'AVG' || aggType === 'LAST') ? (
+              <>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  <strong style={{ color: 'var(--color-text)' }}>{indicadores.length}</strong> indicadores ({aggType === 'AVG' ? 'média' : 'último valor'})
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-traffic-green)' }}>
+                  ✓ Agregação por {aggType === 'AVG' ? 'média' : 'último valor'}
+                </span>
+              </>
             ) : (
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-traffic-green)' }}>
-                ✓ Objectivo totalmente distribuído por indicadores
-              </span>
+              <>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  <strong style={{ color: 'var(--color-text)' }}>{totalPlanned.toLocaleString('pt-PT')}</strong> atribuídos em indicadores
+                </span>
+                {unassigned > 0 ? (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-traffic-red)' }}>
+                    ⚠ {unassigned.toLocaleString('pt-PT')} por distribuir por indicadores
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-traffic-green)' }}>
+                    ✓ Objectivo totalmente distribuído por indicadores
+                  </span>
+                )}
+              </>
             )}
           </div>
         )}
@@ -634,6 +715,7 @@ export default function TaskDetailPage() {
           <ForecastAlert
             willReachTarget={forecast.will_reach_target}
             targetValue={forecast.target_value}
+            startValue={forecast.start_value}
             velocityPerDay={forecast.velocity_per_day}
             daysRemaining={forecast.days_remaining}
             projectedFinalValue={forecast.projected_final_value}
@@ -642,7 +724,7 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      <Tabs tabs={[
+      <Tabs activeKey={activeTab} onChange={setActiveTab} tabs={[
         { key: 'indicadores', label: `Indicadores (${indicadores.length})` },
         { key: 'forecast', label: 'Previsão' },
         { key: 'blockers', label: `Impedimentos (${blockers.length})` },
@@ -677,6 +759,8 @@ export default function TaskDetailPage() {
                     hasPhoto={!!m.photo_url}
                     notes={m.notes}
                     assigneeName={m.assignee?.name}
+                    isReduction={isReduction}
+                    taskStartValue={isReduction ? startVal : undefined}
                     onViewDetails={() => setDetailMsId(m.id)}
                     onUpdate={can('update:milestone') && m.status !== 'DONE' ? () => setProgressMs(m) : undefined}
                     onEdit={can('update:milestone') ? () => openEditMilestone(m) : undefined}
@@ -736,8 +820,8 @@ export default function TaskDetailPage() {
           )
 
           if (activeTab === 'scopes') {
-            const ascs    = ascsData?.data    ?? []
-            const regioes = regioesData?.data ?? []
+            const ascs    = ascsGeo?.data    ?? ascsData?.data    ?? []
+            const regioes = regioesGeo?.data ?? regioesData?.data ?? []
 
             // Task-level progress (same for all scopes of this task)
             const taskProgress = {
@@ -750,11 +834,11 @@ export default function TaskDetailPage() {
 
             const mapFeatures = (task.scopes ?? []).flatMap(s => {
               if (s.scope_type === 'ASC') {
-                const asc = ascs.find(a => a.id === s.scope_id)
+                const asc = ascs.find((a: any) => a.id === s.scope_id)
                 if (asc?.polygon) return [{ name: asc.name, scopeType: 'ASC', geometry: asc.polygon as any, ...taskProgress }]
               }
               if (s.scope_type === 'REGIAO') {
-                const reg = regioes.find(r => r.id === s.scope_id)
+                const reg = regioes.find((r: any) => r.id === s.scope_id)
                 if (reg?.polygon) return [{ name: reg.name, scopeType: 'Região', geometry: reg.polygon as any, ...taskProgress }]
               }
               return []
@@ -762,8 +846,8 @@ export default function TaskDetailPage() {
 
             const scopeLabels = (task.scopes ?? []).map(s => {
               const name = s.scope_name
-                ?? (s.scope_type === 'ASC'    ? ascs.find(a    => a.id === s.scope_id)?.name : undefined)
-                ?? (s.scope_type === 'REGIAO' ? regioes.find(r => r.id === s.scope_id)?.name : undefined)
+                ?? (s.scope_type === 'ASC'    ? ascs.find((a: any)    => a.id === s.scope_id)?.name : undefined)
+                ?? (s.scope_type === 'REGIAO' ? regioes.find((r: any) => r.id === s.scope_id)?.name : undefined)
                 ?? (s.scope_type === 'NACIONAL' ? 'Nacional' : `ID ${s.scope_id}`)
               return { name, scope_type: s.scope_type }
             })
@@ -913,6 +997,8 @@ export default function TaskDetailPage() {
           taskEndDate={task?.end_date ? task.end_date.slice(0, 10) : undefined}
           taskTargetValue={targetVal}
           taskTotalPlanned={totalPlanned}
+          taskAggType={aggType}
+          isReduction={isReduction}
         />
       </Modal>
 
@@ -949,6 +1035,8 @@ export default function TaskDetailPage() {
           taskEndDate={task?.end_date ? task.end_date.slice(0, 10) : undefined}
           taskTargetValue={targetVal}
           taskTotalPlanned={Math.max(0, totalPlanned - (editingMilestone?.planned_value ?? 0))}
+          taskAggType={aggType}
+          isReduction={isReduction}
         />
       </Modal>
 
@@ -957,6 +1045,7 @@ export default function TaskDetailPage() {
         <ProgressModal
           ms={progressMs}
           goalLabel={task?.goal_label}
+          isReduction={isReduction}
           onClose={() => setProgressMs(null)}
           onSuccess={() => {
             const updatedMsId = progressMs?.id
@@ -1033,7 +1122,7 @@ export default function TaskDetailPage() {
             goal_label:       task.goal_label,
             start_value:      task.start_value ?? 0,
             target_value:     task.target_value ?? 0,
-            aggregation_type: (task as any).aggregation_type ?? 'SUM_UP',
+            aggregation_type: task.aggregation_type ?? 'SUM_UP',
             weight:           task.weight ?? 100,
             start_date:       task.start_date ? task.start_date.slice(0, 10) : '',
             end_date:         task.end_date   ? task.end_date.slice(0, 10)   : '',

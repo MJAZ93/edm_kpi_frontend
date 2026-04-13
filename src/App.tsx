@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query'
+import { PersistQueryClientProvider, type PersistedClient } from '@tanstack/react-query-persist-client'
+import { get, set, del } from 'idb-keyval'
 import { Toaster } from 'react-hot-toast'
 
 import ProtectedRoute from './router/ProtectedRoute'
@@ -58,13 +60,38 @@ const qc = new QueryClient({
     queries: {
       retry: 1,
       staleTime: 30_000,
+      gcTime: 1000 * 60 * 60 * 24,        // 24h — keep cache entries alive for persistence
     },
   },
 })
 
+// ── Persist geo & org queries to IndexedDB ────────────────────────────────
+// IndexedDB has no practical size limit (vs localStorage's ~5MB), so we can
+// persist everything including polygon data (33MB+).
+const IDB_KEY = 'edm-kpi-query-cache'
+const PERSISTED_KEYS = ['geo', 'departamentos', 'direcoes', 'pelouros']
+
+const persister = {
+  persistClient: async (client: PersistedClient) => { await set(IDB_KEY, client) },
+  restoreClient: async (): Promise<PersistedClient | undefined> => await get(IDB_KEY),
+  removeClient:  async () => { await del(IDB_KEY) },
+}
+
+const persistOptions = {
+  persister,
+  maxAge: 1000 * 60 * 60 * 24,              // 24h — matches daily refresh cadence
+  dehydrateOptions: {
+    shouldDehydrateQuery: (query: any) => {
+      if (query.state.status !== 'success') return false
+      const key = query.queryKey as string[]
+      return PERSISTED_KEYS.includes(key[0])
+    },
+  },
+}
+
 export default function App() {
   return (
-    <QueryClientProvider client={qc}>
+    <PersistQueryClientProvider client={qc} persistOptions={persistOptions}>
       <BrowserRouter>
         <Routes>
           {/* Public */}
@@ -142,6 +169,6 @@ export default function App() {
           },
         }}
       />
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   )
 }

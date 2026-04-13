@@ -28,13 +28,19 @@ export default function AscsPage() {
   const [directorId, setDirectorId] = useState<number | null>(null)
   const [polygon, setPolygon] = useState<{ type: string; coordinates: any } | null>(null)
 
-  const { data, isLoading } = useQuery({ queryKey: ['ascs'], queryFn: geoService.listAscs })
-  const { data: regioes } = useQuery({ queryKey: ['regioes'], queryFn: geoService.listRegioes })
+  // Read polygon data from cache (prefetched at login, persisted in IndexedDB)
+  const { data, isLoading } = useQuery({
+    queryKey: ['geo', 'ascs', 'polygon'],
+    queryFn: () => geoService.listAscs({ includePolygon: true }),
+    staleTime: Infinity,
+  })
+  // Regioes dropdown only needs names — read light data from cache
+  const regioesData = qc.getQueryData<any>(['geo', 'regioes'])
   const items = data?.data ?? []
 
   const regiaoOpts = [
     { value: '', label: 'Seleccionar região…' },
-    ...(regioes?.data?.map(r => ({ value: String(r.id), label: r.name })) ?? []),
+    ...(regioesData?.data?.map((r: any) => ({ value: String(r.id), label: r.name })) ?? []),
   ]
 
   const open = (mode: typeof modal, item?: ASC) => {
@@ -56,7 +62,7 @@ export default function AscsPage() {
       director_id: directorId ?? undefined,
       polygon: polygon as any ?? undefined,
     }),
-    onSuccess: () => { toast.success('ASC criada.'); qc.invalidateQueries({ queryKey: ['ascs'] }); setModal(null) },
+    onSuccess: () => { toast.success('ASC criada.'); qc.invalidateQueries({ queryKey: ['geo', 'ascs'] }); setModal(null) },
     onError: () => toast.error('Erro ao criar.'),
   })
 
@@ -68,13 +74,13 @@ export default function AscsPage() {
       director_id: directorId ?? undefined,
       polygon: polygon as any ?? undefined,
     }),
-    onSuccess: () => { toast.success('ASC actualizada.'); qc.invalidateQueries({ queryKey: ['ascs'] }); setModal(null) },
+    onSuccess: () => { toast.success('ASC actualizada.'); qc.invalidateQueries({ queryKey: ['geo', 'ascs'] }); setModal(null) },
     onError: () => toast.error('Erro ao actualizar.'),
   })
 
   const deleteMut = useMutation({
     mutationFn: () => geoService.deleteAsc(selected!.id),
-    onSuccess: () => { toast.success('ASC eliminada.'); qc.invalidateQueries({ queryKey: ['ascs'] }); setModal(null) },
+    onSuccess: () => { toast.success('ASC eliminada.'); qc.invalidateQueries({ queryKey: ['geo', 'ascs'] }); setModal(null) },
     onError: () => toast.error('Erro ao eliminar.'),
   })
 

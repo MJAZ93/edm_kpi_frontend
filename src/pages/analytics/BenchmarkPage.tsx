@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { GitCompare, Trophy, Minus, ChevronRight, ArrowRight } from 'lucide-react'
 import { dashboardService } from '../../services/dashboard.service'
-import { orgService } from '../../services/org.service'
-import { geoService } from '../../services/geo.service'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/ui/Card'
 import Select from '../../components/ui/Select'
@@ -106,17 +104,18 @@ export default function BenchmarkPage() {
   const [idB, setIdB] = useState('')
   const [period, setPeriod] = useState('2026-04')
 
-  // Entity lists
-  const { data: ascs }        = useQuery({ queryKey: ['geo', 'ascs'],        queryFn: () => geoService.listAscs() })
-  const { data: regioes }     = useQuery({ queryKey: ['geo', 'regioes'],     queryFn: () => geoService.listRegioes() })
-  const { data: direcoes }    = useQuery({ queryKey: ['direcoes'],           queryFn: () => orgService.listDirecoes() })
-  const { data: departamentos } = useQuery({ queryKey: ['departamentos'],    queryFn: () => orgService.listDepartamentos() })
+  // Entity lists — read-only from cache (populated by AppShell)
+  const qcRef = useQueryClient()
+  const ascs          = qcRef.getQueryData<any>(['geo', 'ascs'])
+  const regioes       = qcRef.getQueryData<any>(['geo', 'regioes'])
+  const direcoes      = qcRef.getQueryData<any>(['direcoes'])
+  const departamentos = qcRef.getQueryData<any>(['departamentos'])
 
   const entityOptions = useMemo(() => {
-    if (entityType === 'ASC')          return ascs?.data?.map(a => ({ value: String(a.id), label: a.name })) ?? []
-    if (entityType === 'REGIAO')       return regioes?.data?.map(r => ({ value: String(r.id), label: r.name })) ?? []
-    if (entityType === 'DIRECAO')      return direcoes?.data?.map(d => ({ value: String(d.id), label: d.name })) ?? []
-    return departamentos?.data?.map(d => ({ value: String(d.id), label: d.name })) ?? []
+    if (entityType === 'ASC')          return ascs?.data?.map((a: any) => ({ value: String(a.id), label: a.name })) ?? []
+    if (entityType === 'REGIAO')       return regioes?.data?.map((r: any) => ({ value: String(r.id), label: r.name })) ?? []
+    if (entityType === 'DIRECAO')      return direcoes?.data?.map((d: any) => ({ value: String(d.id), label: d.name })) ?? []
+    return departamentos?.data?.map((d: any) => ({ value: String(d.id), label: d.name })) ?? []
   }, [entityType, ascs, regioes, direcoes, departamentos])
 
   // Auto-select first two when list loads
@@ -142,8 +141,8 @@ export default function BenchmarkPage() {
 
   const optsWithPlaceholder = [{ value: '', label: 'Seleccionar…' }, ...entityOptions]
 
-  const nameA = data?.a?.name ?? entityOptions.find(o => o.value === idA)?.label ?? 'A'
-  const nameB = data?.b?.name ?? entityOptions.find(o => o.value === idB)?.label ?? 'B'
+  const nameA = data?.a?.name ?? entityOptions.find((o: any) => o.value === idA)?.label ?? 'A'
+  const nameB = data?.b?.name ?? entityOptions.find((o: any) => o.value === idB)?.label ?? 'B'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>

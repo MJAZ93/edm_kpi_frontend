@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 interface ForecastAlertProps {
   willReachTarget: boolean
   targetValue: number
+  startValue?: number
   velocityPerDay: number
   daysRemaining: number
   projectedFinalValue: number
@@ -11,8 +12,12 @@ interface ForecastAlertProps {
   style?: React.CSSProperties
 }
 
-export default function ForecastAlert({ willReachTarget, targetValue, velocityPerDay, daysRemaining, projectedFinalValue, message, style }: ForecastAlertProps) {
-  const pct = Math.round((projectedFinalValue / targetValue) * 100)
+export default function ForecastAlert({ willReachTarget, targetValue, startValue, velocityPerDay, daysRemaining, projectedFinalValue, message, style }: ForecastAlertProps) {
+  // Use goal progress formula when start value is available
+  const diff = (startValue !== undefined && targetValue !== startValue) ? targetValue - startValue : targetValue
+  const pct = diff !== 0
+    ? Math.round(((projectedFinalValue - (startValue ?? 0)) / diff) * 100)
+    : 100
 
   if (willReachTarget) {
     return (

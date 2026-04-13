@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, FolderKanban, BarChart3, Map, Trophy, GitCompare,
   Building2, Globe, Users, ShieldAlert, Bell, ClipboardList,
@@ -9,6 +10,10 @@ import Avatar from '../ui/Avatar'
 import { useAuthStore } from '../../stores/auth.store'
 import { useUIStore } from '../../stores/ui.store'
 import { useAuth } from '../../hooks/useAuth'
+import api from '../../services/api'
+
+declare const __APP_VERSION__: string
+declare const __BUILD_TIME__: string
 
 interface NavItem {
   key: string
@@ -63,6 +68,13 @@ export default function Sidebar({ activeKey = '' }: SidebarProps) {
   const notificationCount = useUIStore(s => s.notificationCount)
   const { can } = useAuth()
 
+  const { data: backendVersion } = useQuery({
+    queryKey: ['backend-version'],
+    queryFn: () => api.get<{ version: string }>('/public/version').then(r => r.data.version),
+    staleTime: Infinity,
+    retry: false,
+  })
+
   // Filter nav items by permission
   const visibleNav = NAV
     .filter(item => !item.permission || can(item.permission))
@@ -94,10 +106,10 @@ export default function Sidebar({ activeKey = '' }: SidebarProps) {
       {/* Logo */}
       <div style={{ padding: '22px 20px 18px', borderBottom: '1px solid var(--sidebar-border)', cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src="/logo.png" alt="EDM KPI" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'contain' }} />
+          <img src="/logo.png" alt="DPRP KPIs" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'contain' }} />
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>EDM KPI</div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.40)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>KPI Platform</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>DPRP KPIs</div>
+            <div style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.40)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Losses Action Plan</div>
           </div>
         </div>
       </div>
@@ -174,6 +186,12 @@ export default function Sidebar({ activeKey = '' }: SidebarProps) {
           )
         })}
       </nav>
+
+      {/* Version info */}
+      <div style={{ padding: '6px 14px', borderTop: '1px solid var(--sidebar-border)', display: 'flex', justifyContent: 'space-between', opacity: 0.35 }}>
+        <span style={{ fontSize: 9, color: '#fff', fontWeight: 600 }}>FE v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '?'}</span>
+        <span style={{ fontSize: 9, color: '#fff', fontWeight: 600 }}>BE v{backendVersion ?? '?'}</span>
+      </div>
 
       {/* Footer */}
       <div style={{ padding: '12px 14px', borderTop: '1px solid var(--sidebar-border)', display: 'flex', alignItems: 'center', gap: 10 }}>

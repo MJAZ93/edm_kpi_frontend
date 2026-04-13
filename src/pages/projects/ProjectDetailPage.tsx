@@ -8,7 +8,6 @@ import { tasksService } from '../../services/tasks.service'
 import { milestonesService } from '../../services/milestones.service'
 import { dashboardService } from '../../services/dashboard.service'
 import { geoService } from '../../services/geo.service'
-import { orgService } from '../../services/org.service'
 import ScopeMap from '../../components/map/ScopeMap'
 import { useAuth } from '../../hooks/useAuth'
 import PageHeader from '../../components/layout/PageHeader'
@@ -83,10 +82,16 @@ export default function ProjectDetailPage() {
     queryKey: ['dashboard', 'timeline', { entity_type: 'CA', id: projectId }],
     queryFn: () => dashboardService.getTimeline({ entity_type: 'CA' }),
   })
-  const { data: ascsData }      = useQuery({ queryKey: ['geo', 'ascs'],    queryFn: () => geoService.listAscs()              })
-  const { data: regioesData }   = useQuery({ queryKey: ['geo', 'regioes'], queryFn: () => geoService.listRegioes()            })
-  const { data: deptsData }     = useQuery({ queryKey: ['departamentos'],   queryFn: () => orgService.listDepartamentos()      })
-  const { data: direcoesData }  = useQuery({ queryKey: ['direcoes'],        queryFn: () => orgService.listDirecoes()           })
+  // Geo & org data — read-only from cache (populated by AppShell)
+  const qcRef = useQueryClient()
+  const ascsData     = qcRef.getQueryData<any>(['geo', 'ascs'])
+  const regioesData  = qcRef.getQueryData<any>(['geo', 'regioes'])
+  const deptsData    = qcRef.getQueryData<any>(['departamentos'])
+  const direcoesData = qcRef.getQueryData<any>(['direcoes'])
+  const [activeTab, setActiveTab] = useState('overview')
+  const needsPolygon = activeTab === 'scope'
+  const { data: ascsGeo }       = useQuery({ queryKey: ['geo', 'ascs', 'polygon'],    queryFn: () => geoService.listAscs({ includePolygon: true }),    staleTime: Infinity, enabled: needsPolygon })
+  const { data: regioesGeo }    = useQuery({ queryKey: ['geo', 'regioes', 'polygon'], queryFn: () => geoService.listRegioes({ includePolygon: true }), staleTime: Infinity, enabled: needsPolygon })
 
   const createTask = useMutation({
     mutationFn: (payload: CreateTaskPayload) => tasksService.create(projectId, payload),
@@ -132,25 +137,25 @@ export default function ProjectDetailPage() {
 
   const ascMap = useMemo(() => {
     const m: Record<number, string> = {}
-    ascsData?.data?.forEach(a => { m[a.id] = a.name })
+    ascsData?.data?.forEach((a: any) => { m[a.id] = a.name })
     return m
   }, [ascsData])
 
   const regiaoMap = useMemo(() => {
     const m: Record<number, string> = {}
-    regioesData?.data?.forEach(r => { m[r.id] = r.name })
+    regioesData?.data?.forEach((r: any) => { m[r.id] = r.name })
     return m
   }, [regioesData])
 
   const deptMap = useMemo(() => {
     const m: Record<number, string> = {}
-    deptsData?.data?.forEach(d => { m[d.id] = d.name })
+    deptsData?.data?.forEach((d: any) => { m[d.id] = d.name })
     return m
   }, [deptsData])
 
   const direcaoMap = useMemo(() => {
     const m: Record<number, string> = {}
-    direcoesData?.data?.forEach(d => { m[d.id] = d.name })
+    direcoesData?.data?.forEach((d: any) => { m[d.id] = d.name })
     return m
   }, [direcoesData])
 
@@ -234,11 +239,11 @@ export default function ProjectDetailPage() {
     } : {}
 
     if (s.scope_type === 'ASC') {
-      const asc = (ascsData?.data ?? []).find(a => a.id === s.scope_id)
+      const asc = (ascsGeo?.data ?? ascsData?.data ?? []).find((a: any) => a.id === s.scope_id)
       if (asc?.polygon) return [{ name: asc.name, scopeType: 'ASC', geometry: asc.polygon as any, ...progressProps }]
     }
     if (s.scope_type === 'REGIAO') {
-      const reg = (regioesData?.data ?? []).find(r => r.id === s.scope_id)
+      const reg = (regioesGeo?.data ?? regioesData?.data ?? []).find((r: any) => r.id === s.scope_id)
       if (reg?.polygon) return [{ name: reg.name, scopeType: 'Região', geometry: reg.polygon as any, ...progressProps }]
     }
     return []
@@ -764,7 +769,7 @@ export default function ProjectDetailPage() {
         }
       />
 
-      <Tabs tabs={[
+      <Tabs activeKey={activeTab} onChange={setActiveTab} tabs={[
         { key: 'overview',  label: 'Visão Geral' },
         { key: 'tasks',     label: `Acções (${tasks.length})` },
         { key: 'gantt',     label: 'Cronograma' },

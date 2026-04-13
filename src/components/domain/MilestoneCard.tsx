@@ -17,6 +17,10 @@ interface IndicadorCardProps {
   hasBlocker?: boolean
   notes?: string
   assigneeName?: string
+  /** When true, lower achieved vs planned = better (e.g. losses, defects) */
+  isReduction?: boolean
+  /** Task start value — used for reduction goal progress: ((start-achieved)/(start-planned))*100 */
+  taskStartValue?: number
   onViewDetails?: () => void
   onUpdate?: () => void
   onEdit?: () => void
@@ -43,8 +47,22 @@ const frequencyMap: Record<string, string> = {
   ANNUAL: 'Anual',
 }
 
-export default function IndicadorCard({ title, scopeLabel, frequency, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, assigneeName, onViewDetails, onUpdate, onEdit }: IndicadorCardProps) {
-  const pct = achievedValue !== undefined ? Math.min(100, (achievedValue / plannedValue) * 100) : 0
+export default function IndicadorCard({ title, scopeLabel, frequency, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, assigneeName, isReduction, taskStartValue, onViewDetails, onUpdate, onEdit }: IndicadorCardProps) {
+  // Reduction: compare achieved vs monthly target
+  //   planned=21.3, achieved=21.3 → 100% (hit the target)
+  //   planned=21.3, achieved=19.0 → 100% (beat target, cap)
+  //   planned=21.3, achieved=24.4 → -14.6% (exceeded losses by 14.6%)
+  // Growth: achieved/planned as before
+  let pct = 0
+  if (achievedValue !== undefined && plannedValue > 0) {
+    if (isReduction) {
+      pct = achievedValue <= plannedValue
+        ? 100
+        : -((achievedValue - plannedValue) / plannedValue) * 100
+    } else {
+      pct = Math.min(100, (achievedValue / plannedValue) * 100)
+    }
+  }
   const { variant, label } = statusMap[status]
 
   const iconButtonStyle: React.CSSProperties = {

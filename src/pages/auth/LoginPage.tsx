@@ -1,25 +1,47 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
+import Spinner from '../../components/ui/Spinner'
 import { authService } from '../../services/auth.service'
+import { geoService } from '../../services/geo.service'
+import { orgService } from '../../services/org.service'
 import { useAuthStore } from '../../stores/auth.store'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const setAuth = useAuthStore(s => s.setAuth)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPwd, setShowPwd] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
+  const [preloading, setPreloading] = useState(false)
 
   const { mutate, isPending } = useMutation({
     mutationFn: () => authService.login(email, password),
-    onSuccess: ({ token, user }) => {
+    onSuccess: async ({ token, user }) => {
       setAuth(token, user)
+      setPreloading(true)
+
+      // Prefetch all geo & org data (light + polygons) — cached in IndexedDB for 24h
+      try {
+        await Promise.all([
+          qc.fetchQuery({ queryKey: ['geo', 'ascs'],              queryFn: () => geoService.listAscs(),                            staleTime: Infinity }),
+          qc.fetchQuery({ queryKey: ['geo', 'regioes'],           queryFn: () => geoService.listRegioes(),                         staleTime: Infinity }),
+          qc.fetchQuery({ queryKey: ['departamentos'],             queryFn: () => orgService.listDepartamentos(),                   staleTime: Infinity }),
+          qc.fetchQuery({ queryKey: ['direcoes'],                  queryFn: () => orgService.listDirecoes(),                        staleTime: Infinity }),
+          qc.fetchQuery({ queryKey: ['geo', 'ascs', 'polygon'],   queryFn: () => geoService.listAscs({ includePolygon: true }),    staleTime: Infinity }),
+          qc.fetchQuery({ queryKey: ['geo', 'regioes', 'polygon'],queryFn: () => geoService.listRegioes({ includePolygon: true }), staleTime: Infinity }),
+        ])
+      } catch {
+        // Don't block login if prefetch fails — AppShell will retry
+      }
+
+      setPreloading(false)
       navigate('/dashboard', { replace: true })
     },
     onError: (err: any) => {
@@ -42,6 +64,26 @@ export default function LoginPage() {
     mutate()
   }
 
+  // ── Preloading overlay ──────────────────────────────────────────────────
+  if (preloading) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: 'var(--color-bg)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 20,
+      }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(ellipse at 20% 30%, rgba(232,103,10,0.06) 0%, transparent 60%), radial-gradient(ellipse at 80% 70%, rgba(15,118,110,0.06) 0%, transparent 60%)', pointerEvents: 'none' }} />
+        <div style={{ width: 56, height: 56, borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 24px rgba(232,103,10,0.35)' }}>
+          <img src="/logo.png" alt="DPRP KPIs" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        </div>
+        <Spinner size="lg" />
+        <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-text)', position: 'relative' }}>A preparar o ambiente…</p>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', position: 'relative' }}>A carregar dados geográficos e organizacionais</p>
+      </div>
+    )
+  }
+
+  // ── Login form ──────────────────────────────────────────────────────────
   return (
     <div style={{
       minHeight: '100vh', background: 'var(--color-bg)',
@@ -54,10 +96,10 @@ export default function LoginPage() {
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ width: 56, height: 56, borderRadius: 16, overflow: 'hidden', margin: '0 auto 14px', boxShadow: '0 8px 24px rgba(232,103,10,0.35)' }}>
-            <img src="/logo.png" alt="EDM KPI" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <img src="/logo.png" alt="DPRP KPIs" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--color-text)', marginBottom: 6 }}>EDM KPI</h1>
-          <p style={{ fontSize: 14, color: 'var(--color-text-muted)', fontWeight: 500 }}>KPI & Performance Management</p>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--color-text)', marginBottom: 6 }}>DPRP KPIs</h1>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 500 }}>Losses Action Plan</p>
         </div>
 
         {/* Card */}
@@ -110,7 +152,7 @@ export default function LoginPage() {
         </div>
 
         <p style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'var(--color-text-muted)' }}>
-          EDM KPI © {new Date().getFullYear()} — Acesso restrito
+          DPRP KPIs © {new Date().getFullYear()} — Acesso restrito
         </p>
       </div>
     </div>

@@ -27,14 +27,16 @@ function getColor(variant: string, value: number) {
 }
 
 export default function ProgressBar({ value, max = 100, height = 8, color, showLabel = false, label, variant = 'orange', style }: ProgressBarProps) {
-  const pct = Math.min(100, Math.max(0, (value / max) * 100))
-  const fillColor = color || getColor(variant, pct)
+  const rawPct = (value / max) * 100
+  const pct = Math.min(100, Math.max(0, rawPct))
+  const isNegative = rawPct < 0
+  const fillColor = color || (isNegative ? 'var(--color-traffic-red)' : getColor(variant, pct))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, ...style }}>
       {(showLabel || label) && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {label && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-soft)' }}>{label}</span>}
-          {showLabel && <span style={{ fontSize: 12, fontWeight: 700, color: fillColor }}>{Math.round(pct)}%</span>}
+          {showLabel && <span style={{ fontSize: 12, fontWeight: 700, color: fillColor }}>{Math.round(rawPct)}%</span>}
         </div>
       )}
       <div style={{ background: 'rgba(120, 80, 20, 0.13)', borderRadius: 999, height, overflow: 'hidden', border: '1px solid rgba(120, 80, 20, 0.08)' }}>
