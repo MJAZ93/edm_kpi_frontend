@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { FolderKanban, CheckCircle2, BarChart3, ShieldAlert, AlertTriangle, Bell, Search, ArrowRight, Calendar, TrendingUp } from 'lucide-react'
+import { FolderKanban, CheckCircle2, BarChart3, ShieldAlert, AlertTriangle, Bell, Search, ArrowRight, Calendar, TrendingUp, MessageSquare } from 'lucide-react'
 import { dashboardService } from '../../services/dashboard.service'
 import { projectsService } from '../../services/projects.service'
+import { feedbackService } from '../../services/feedback.service'
+import type { Feedback } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/ui/Card'
@@ -43,6 +45,34 @@ const STATUS_LABEL: Record<string, string> = {
   ACTIVE: 'Activo',
   COMPLETED: 'Concluído',
   CANCELLED: 'Cancelado',
+}
+
+const FEEDBACK_CATEGORY_LABEL: Record<string, string> = {
+  GENERAL: 'Geral',
+  PERFORMANCE: 'Desempenho',
+  IMPROVEMENT: 'Melhoria',
+  RECOGNITION: 'Reconhecimento',
+}
+
+const FEEDBACK_CATEGORY_COLOR: Record<string, { bg: string; text: string }> = {
+  GENERAL: { bg: 'var(--color-bg-strong)', text: 'var(--color-text-muted)' },
+  PERFORMANCE: { bg: 'var(--color-traffic-yellow-bg)', text: 'var(--color-traffic-yellow)' },
+  IMPROVEMENT: { bg: 'rgba(122,58,237,0.10)', text: '#7c3aed' },
+  RECOGNITION: { bg: 'var(--color-traffic-green-bg)', text: 'var(--color-traffic-green)' },
+}
+
+function timeAgo(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return 'agora'
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d`
+  return date.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit' })
 }
 
 const CREATOR_TYPE_LABEL: Record<string, string> = {
@@ -113,6 +143,16 @@ export default function DashboardPage() {
     queryFn: () => projectsService.list({ status: 'ACTIVE', limit: 50 }),
   })
 
+  const { data: feedbackData } = useQuery({
+    queryKey: ['feedback', 'received', { page: 0, limit: 5 }],
+    queryFn: () => feedbackService.listReceived({ page: 0, limit: 5 }),
+  })
+
+  const { data: unreadData } = useQuery({
+    queryKey: ['feedback', 'unread-count'],
+    queryFn: feedbackService.unreadCount,
+  })
+
   const allProjects = activeProjects?.data ?? []
 
   const filteredProjects = useMemo(() => {
@@ -167,7 +207,7 @@ export default function DashboardPage() {
         <StatCard label="Total Pilares Estratégicos"    value={summary?.total_projects ?? 0}     icon={<FolderKanban size={17} />} />
         <StatCard label="Indicadores Feitos"  value={summary?.milestones_done ?? 0}    icon={<CheckCircle2 size={17} />}  color="var(--color-green-soft)" />
         <StatCard label="Score Empresa"      value={perf ? `${perf.total_score.toFixed(1)}` : '—'} icon={<BarChart3 size={17} />} color="var(--color-traffic-yellow-bg)" />
-        <StatCard label="Impedimentos"       value={summary?.milestones_blocked ?? 0} icon={<ShieldAlert size={17} />}   color="var(--color-traffic-red-bg)" />
+        <StatCard label="Constrangimentos"       value={summary?.milestones_blocked ?? 0} icon={<ShieldAlert size={17} />}   color="var(--color-traffic-red-bg)" />
       </div>
 
       {/* Performance score + alerts */}
@@ -261,9 +301,97 @@ export default function DashboardPage() {
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <Button variant="secondary" icon={<Bell size={14} />} onClick={() => navigate('/notifications')}>Notificações</Button>
-            <Button variant="primary" icon={<ShieldAlert size={14} />} onClick={() => navigate('/blockers')}>Impedimentos</Button>
+            <Button variant="primary" icon={<ShieldAlert size={14} />} onClick={() => navigate('/blockers')}>Constrangimentos</Button>
           </div>
         </div>
+      </Card>
+
+      {/* ── Feedback Recente ──────────────────────────────────────────────────── */}
+      <Card variant="elevated" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <MessageSquare size={15} style={{ color: 'var(--color-primary)' }} />
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Feedback Recente
+            </p>
+            {(unreadData?.count ?? 0) > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: '#fff', background: 'var(--color-primary)',
+                borderRadius: 10, padding: '2px 8px', minWidth: 18, textAlign: 'center',
+              }}>
+                {unreadData!.count}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => navigate('/feedback')}
+            style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            Ver todos <ArrowRight size={13} />
+          </button>
+        </div>
+
+        {!feedbackData?.data?.length ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--color-text-muted)', fontSize: 13 }}>
+            <MessageSquare size={28} style={{ opacity: 0.3, marginBottom: 8 }} />
+            <p>Sem feedback recente</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {feedbackData.data.slice(0, 5).map((fb: Feedback) => {
+              const catColor = FEEDBACK_CATEGORY_COLOR[fb.category] ?? FEEDBACK_CATEGORY_COLOR.GENERAL
+              return (
+                <div
+                  key={fb.id}
+                  onClick={() => navigate('/feedback')}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 10,
+                    background: 'var(--color-bg-strong)',
+                    cursor: 'pointer',
+                    transition: 'border-color 150ms',
+                    border: '1.5px solid transparent',
+                    borderLeft: !fb.is_read ? '3px solid var(--color-primary)' : '3px solid transparent',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'transparent'; if (!fb.is_read) (e.currentTarget as HTMLElement).style.borderLeftColor = 'var(--color-primary)' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        background: 'var(--color-primary)', color: '#fff',
+                        fontSize: 11, fontWeight: 800,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {(fb.sender?.name ?? '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)' }}>{fb.sender?.name ?? 'Utilizador'}</p>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 5,
+                          background: catColor.bg, color: catColor.text,
+                        }}>
+                          {FEEDBACK_CATEGORY_LABEL[fb.category] ?? fb.category}
+                        </span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', flexShrink: 0, fontWeight: 600 }}>
+                      {timeAgo(fb.created_at)}
+                    </span>
+                  </div>
+                  <p style={{
+                    fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.4,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    fontWeight: fb.is_read ? 400 : 600,
+                  }}>
+                    {fb.message}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </Card>
 
       {/* ── Pilares Estratégicos Activos ─────────────────────────────────────────────────── */}

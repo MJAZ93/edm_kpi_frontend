@@ -1,3 +1,4 @@
+import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient } from '@tanstack/react-query'
 import { PersistQueryClientProvider, type PersistedClient } from '@tanstack/react-query-persist-client'
@@ -8,59 +9,44 @@ import ProtectedRoute from './router/ProtectedRoute'
 import PermissionRoute from './router/PermissionRoute'
 import AppShell from './components/layout/AppShell'
 
-// Auth
+// Auth — eagerly loaded (entry points)
 import LoginPage from './pages/auth/LoginPage'
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
 import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 
-// Dashboard
+// Dashboard — eagerly loaded (landing page)
 import DashboardPage from './pages/dashboard/DashboardPage'
 
-// Projects
-import ProjectsPage from './pages/projects/ProjectsPage'
-import ProjectDetailPage from './pages/projects/ProjectDetailPage'
+// All other pages — lazy loaded for code splitting
+const ProjectsPage       = React.lazy(() => import('./pages/projects/ProjectsPage'))
+const ProjectDetailPage  = React.lazy(() => import('./pages/projects/ProjectDetailPage'))
+const TaskDetailPage     = React.lazy(() => import('./pages/tasks/TaskDetailPage'))
+const DrillDownPage      = React.lazy(() => import('./pages/analytics/DrillDownPage'))
+const MapPage            = React.lazy(() => import('./pages/analytics/MapPage'))
+const TopPerformersPage  = React.lazy(() => import('./pages/analytics/TopPerformersPage'))
+const BenchmarkPage      = React.lazy(() => import('./pages/analytics/BenchmarkPage'))
+const BlockersPage       = React.lazy(() => import('./pages/blockers/BlockersPage'))
+const OrgPage            = React.lazy(() => import('./pages/org/OrgPage'))
+const OrgEntityPage      = React.lazy(() => import('./pages/org/OrgEntityPage'))
+const RegioesPage        = React.lazy(() => import('./pages/geo/RegioesPage'))
+const AscsPage           = React.lazy(() => import('./pages/geo/AscsPage'))
+const UsersPage          = React.lazy(() => import('./pages/users/UsersPage'))
+const FeedbackPage       = React.lazy(() => import('./pages/feedback/FeedbackPage'))
+const NotificationsPage  = React.lazy(() => import('./pages/notifications/NotificationsPage'))
+const AuditPage          = React.lazy(() => import('./pages/audit/AuditPage'))
+const ProfilePage        = React.lazy(() => import('./pages/profile/ProfilePage'))
+const DesignSystemPage   = React.lazy(() => import('./pages/design-system/DesignSystemPage'))
 
-// Tasks
-import TaskDetailPage from './pages/tasks/TaskDetailPage'
-
-// Analytics
-import DrillDownPage from './pages/analytics/DrillDownPage'
-import MapPage from './pages/analytics/MapPage'
-import TopPerformersPage from './pages/analytics/TopPerformersPage'
-import BenchmarkPage from './pages/analytics/BenchmarkPage'
-
-// Blockers
-import BlockersPage from './pages/blockers/BlockersPage'
-
-// Org
-import OrgPage from './pages/org/OrgPage'
-import OrgEntityPage from './pages/org/OrgEntityPage'
-
-// Geo
-import RegioesPage from './pages/geo/RegioesPage'
-import AscsPage from './pages/geo/AscsPage'
-
-// Users
-import UsersPage from './pages/users/UsersPage'
-
-// Notifications
-import NotificationsPage from './pages/notifications/NotificationsPage'
-
-// Audit
-import AuditPage from './pages/audit/AuditPage'
-
-// Profile
-import ProfilePage from './pages/profile/ProfilePage'
-
-// Design system
-import DesignSystemPage from './pages/design-system/DesignSystemPage'
 
 const qc = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 30_000,
-      gcTime: 1000 * 60 * 60 * 24,        // 24h — keep cache entries alive for persistence
+      staleTime: 1000 * 60 * 5,             // 5min — data stays fresh, no refetch on navigate
+      gcTime: 1000 * 60 * 60 * 24,          // 24h — keep cache entries alive for persistence
+      refetchOnWindowFocus: false,           // Don't refetch when user alt-tabs back
+      refetchOnMount: false,                 // Use cached data on navigation, don't re-spinner
+      refetchOnReconnect: false,             // Don't refetch on network reconnect
     },
   },
 })
@@ -113,6 +99,8 @@ export default function App() {
               <Route path="/analytics/map" element={<MapPage />} />
               <Route path="/analytics/top-performers" element={<TopPerformersPage />} />
               <Route path="/analytics/benchmark" element={<BenchmarkPage />} />
+
+              <Route path="/feedback" element={<FeedbackPage />} />
 
               <Route path="/blockers" element={<BlockersPage />} />
 

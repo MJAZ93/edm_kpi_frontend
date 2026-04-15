@@ -26,7 +26,7 @@ const schema = z.object({
   goal_label:       z.string().min(2),
   start_value:      z.coerce.number(),
   target_value:     z.coerce.number(),
-  aggregation_type: z.enum(['SUM_UP', 'SUM_DOWN', 'AVG', 'LAST']).default('SUM_UP'),
+  aggregation_type: z.enum(['SUM_UP', 'SUM_DOWN', 'AVG', 'LAST', 'MANUAL']).default('SUM_UP'),
   weight:           z.coerce.number().min(0).max(100),
   start_date:       z.string().min(1),
   end_date:         z.string().min(1),
@@ -61,6 +61,7 @@ const AGG_TYPE_OPTS = [
   { value: 'SUM_DOWN', label: 'Decrescente acumulativo', hint: 'Indicadores reduzem a partir do valor inicial' },
   { value: 'AVG',      label: 'Média',                   hint: 'Média dos indicadores = valor da acção' },
   { value: 'LAST',     label: 'Último valor',            hint: 'Último indicador actualizado define o valor da acção' },
+  { value: 'MANUAL',   label: 'Manual',                  hint: 'Valor definido manualmente pelo utilizador' },
 ]
 const SCOPE_TYPE_OPTS = [
   { value: 'ASC',     label: 'ASC'     },

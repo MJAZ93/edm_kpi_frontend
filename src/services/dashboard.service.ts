@@ -70,4 +70,7 @@ export const dashboardService = {
 
   getRegionalOverview: () =>
     api.get<any>('/private/dashboard/regional-overview').then(r => r.data),
+
+  getDirecaoMilestones: (direcaoId: number) =>
+    api.get<any>('/private/dashboard/direcao-milestones', { params: { direcao_id: direcaoId } }).then(r => r.data),
 }

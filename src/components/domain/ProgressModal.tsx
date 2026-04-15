@@ -17,51 +17,84 @@ const MONTH_NAMES = [
 const QUARTER_NAMES = ['1º Trimestre', '2º Trimestre', '3º Trimestre', '4º Trimestre']
 const SEMESTER_NAMES = ['1º Semestre', '2º Semestre']
 
-/** Generate period options based on frequency and current year */
-function buildPeriodOptions(frequency: Frequency | string | undefined): { value: string; label: string }[] {
-  const year = new Date().getFullYear()
+/** Generate period options based on frequency, bounded by startDate → endDate */
+export function buildPeriodOptions(
+  frequency: Frequency | string | undefined,
+  startDate?: string,  // YYYY-MM-DD or ISO
+  endDate?: string,    // YYYY-MM-DD or ISO (milestone planned_date)
+): { value: string; label: string }[] {
+  const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1)
+  const end = endDate ? new Date(endDate) : new Date(new Date().getFullYear(), 11, 31)
+
   switch (frequency) {
-    case 'MONTHLY':
-      return MONTH_NAMES.map((name, i) => ({
-        value: `${year}-${String(i + 1).padStart(2, '0')}`,
-        label: `${name} ${year}`,
-      }))
-    case 'QUARTERLY':
-      return QUARTER_NAMES.map((name, i) => ({
-        value: `${year}-Q${i + 1}`,
-        label: `${name} ${year}`,
-      }))
-    case 'BIANNUAL':
-      return SEMESTER_NAMES.map((name, i) => ({
-        value: `${year}-S${i + 1}`,
-        label: `${name} ${year}`,
-      }))
-    case 'ANNUAL':
-      return [
-        { value: `${year - 1}`, label: `${year - 1}` },
-        { value: `${year}`, label: `${year}` },
-      ]
-    case 'WEEKLY': {
-      // Show last 8 weeks + next 4 weeks
+    case 'MONTHLY': {
       const opts: { value: string; label: string }[] = []
-      const now = new Date()
-      for (let w = -8; w <= 4; w++) {
-        const d = new Date(now)
-        d.setDate(d.getDate() + w * 7)
-        const weekStart = new Date(d)
-        weekStart.setDate(d.getDate() - d.getDay() + 1) // Monday
-        const iso = weekStart.toISOString().slice(0, 10)
-        const weekNum = getWeekNumber(weekStart)
+      const d = new Date(start.getFullYear(), start.getMonth(), 1)
+      while (d <= end) {
+        const y = d.getFullYear()
+        const m = d.getMonth()
         opts.push({
-          value: `${weekStart.getFullYear()}-W${String(weekNum).padStart(2, '0')}`,
-          label: `Semana ${weekNum} (${weekStart.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit' })})`,
+          value: `${y}-${String(m + 1).padStart(2, '0')}`,
+          label: `${MONTH_NAMES[m]} ${y}`,
         })
+        d.setMonth(d.getMonth() + 1)
+      }
+      return opts
+    }
+    case 'QUARTERLY': {
+      const opts: { value: string; label: string }[] = []
+      const startQ = Math.floor(start.getMonth() / 3)
+      const d = new Date(start.getFullYear(), startQ * 3, 1)
+      while (d <= end) {
+        const y = d.getFullYear()
+        const q = Math.floor(d.getMonth() / 3) + 1
+        opts.push({
+          value: `${y}-Q${q}`,
+          label: `${QUARTER_NAMES[q - 1]} ${y}`,
+        })
+        d.setMonth(d.getMonth() + 3)
+      }
+      return opts
+    }
+    case 'BIANNUAL': {
+      const opts: { value: string; label: string }[] = []
+      const startS = Math.floor(start.getMonth() / 6)
+      const d = new Date(start.getFullYear(), startS * 6, 1)
+      while (d <= end) {
+        const y = d.getFullYear()
+        const s = Math.floor(d.getMonth() / 6) + 1
+        opts.push({
+          value: `${y}-S${s}`,
+          label: `${SEMESTER_NAMES[s - 1]} ${y}`,
+        })
+        d.setMonth(d.getMonth() + 6)
+      }
+      return opts
+    }
+    case 'ANNUAL': {
+      const opts: { value: string; label: string }[] = []
+      for (let y = start.getFullYear(); y <= end.getFullYear(); y++) {
+        opts.push({ value: `${y}`, label: `${y}` })
+      }
+      return opts
+    }
+    case 'WEEKLY': {
+      const opts: { value: string; label: string }[] = []
+      const d = new Date(start)
+      d.setDate(d.getDate() - d.getDay() + 1) // Monday
+      while (d <= end) {
+        const weekNum = getWeekNumber(d)
+        opts.push({
+          value: `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`,
+          label: `Semana ${weekNum} (${d.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit' })})`,
+        })
+        d.setDate(d.getDate() + 7)
       }
       return opts
     }
     case 'DAILY':
     default:
-      return [] // No period selector for daily or unknown
+      return []
   }
 }
 
@@ -112,16 +145,22 @@ interface ProgressModalProps {
     planned_value?: number
     status?: string
     frequency?: string
+    planned_date?: string
+    aggregation_type?: string
   }
   /** Label for the unit (e.g. "Inspecções Realizadas") — shown next to value fields */
   goalLabel?: string
   /** When true, lower values = better (e.g. losses, defects) */
   isReduction?: boolean
+  /** Task start date (YYYY-MM-DD) to bound period options */
+  taskStartDate?: string
+  /** Parent task's aggregation_type — used as fallback when milestone has none */
+  taskAggType?: string
   onClose: () => void
   onSuccess: () => void
 }
 
-export default function ProgressModal({ ms, goalLabel, isReduction, onClose, onSuccess }: ProgressModalProps) {
+export default function ProgressModal({ ms, goalLabel, isReduction, taskStartDate, taskAggType, onClose, onSuccess }: ProgressModalProps) {
   const [increment, setIncrement] = useState('')
   const [period, setPeriod]       = useState('')
   const [status, setStatus]       = useState<string>(ms.status === 'DONE' ? 'DONE' : 'PENDING')
@@ -145,22 +184,47 @@ export default function ProgressModal({ ms, goalLabel, isReduction, onClose, onS
     return set
   }, [existingProgress])
 
-  const periodOptions = useMemo(() => buildPeriodOptions(ms.frequency), [ms.frequency])
+  const periodOptions = useMemo(
+    () => buildPeriodOptions(ms.frequency, taskStartDate, ms.planned_date),
+    [ms.frequency, taskStartDate, ms.planned_date],
+  )
   const hasPeriodSelector = periodOptions.length > 0
 
+  const msAgg     = ms.aggregation_type || taskAggType || 'SUM_UP'
   const incNum    = parseFloat(increment) || 0
   const current   = ms.achieved_value ?? 0
   const planned   = ms.planned_value  ?? 0
-  const remaining = isReduction
-    ? Math.max(0, current - planned)   // reduction: how much we still need to reduce
-    : Math.max(0, planned - current)   // growth: how much we still need to grow
-  const newTotal  = current + incNum
+  const eventCount = existingProgress?.events?.length ?? 0
+
+  // Compute projected newTotal based on aggregation type
+  const newTotal = useMemo(() => {
+    if (incNum <= 0) return current
+    switch (msAgg) {
+      case 'AVG': {
+        // Average of all existing values + new one
+        const existingSum = (existingProgress?.events ?? []).reduce((s, e) => s + (e.increment_value ?? 0), 0)
+        return (existingSum + incNum) / (eventCount + 1)
+      }
+      case 'LAST':
+        return incNum  // last value replaces everything
+      default: // SUM_UP
+        return current + incNum
+    }
+  }, [msAgg, incNum, current, existingProgress, eventCount])
+
+  // Reduction: achieved/planned when under target, negative when over.
+  // Growth: achieved/planned capped at 100%.
+  const remaining = Math.abs(planned - current)
   const pct       = planned > 0
     ? isReduction
-      ? Math.min(100, (planned / newTotal) * 100)   // lower total → closer to 100%
-      : Math.min(100, (newTotal / planned) * 100)
+      ? (newTotal || 0) <= planned
+        ? Math.min(100, ((newTotal || 0) / planned) * 100)
+        : -(((newTotal || 0) - planned) / planned) * 100
+      : Math.min(100, ((newTotal || 0) / planned) * 100)
     : 0
   const labelUnit = goalLabel || 'Valor'
+  const remainingLabel = isReduction ? 'Excesso' : 'Diferença'
+  const incrementLabel = msAgg === 'LAST' ? 'Novo Valor' : msAgg === 'AVG' ? 'Valor do Período' : 'Quantidade a Adicionar'
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null
@@ -246,7 +310,7 @@ export default function ProgressModal({ ms, goalLabel, isReduction, onClose, onS
             {[
               { label: 'Realizado',  val: current,   color: 'var(--color-primary)' },
               { label: isReduction ? 'Alvo' : 'Planeado',   val: planned,   color: 'var(--color-text-muted)' },
-              { label: isReduction ? 'A Reduzir' : 'Em Falta',   val: remaining, color: remaining > 0 ? 'var(--color-traffic-yellow)' : 'var(--color-traffic-green)' },
+              { label: remainingLabel,   val: remaining, color: remaining > 0 ? 'var(--color-traffic-yellow)' : 'var(--color-traffic-green)' },
             ].map(item => (
               <div key={item.label} style={{ padding: '10px 12px', background: 'var(--color-bg-strong)', borderRadius: 12, textAlign: 'center', border: '1px solid var(--color-border)' }}>
                 <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{item.label}</p>
@@ -301,7 +365,7 @@ export default function ProgressModal({ ms, goalLabel, isReduction, onClose, onS
           {/* ── Increment input ───────────────────────────────────────────── */}
           <div>
             <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>
-              Quantidade a Adicionar <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>({labelUnit})</span>
+              {incrementLabel} <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>({labelUnit})</span>
             </label>
             <input
               type="number"
@@ -325,13 +389,19 @@ export default function ProgressModal({ ms, goalLabel, isReduction, onClose, onS
                 <p style={{ fontSize: 15, fontWeight: 900, color: 'var(--color-text)' }}>{current.toLocaleString('pt-PT')}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, justifyContent: 'center' }}>
-                <Plus size={12} color="var(--color-primary)" />
+                {msAgg === 'LAST' ? (
+                  <ArrowRight size={13} color="var(--color-primary)" />
+                ) : msAgg === 'AVG' ? (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)' }}>AVG</span>
+                ) : (
+                  <Plus size={12} color="var(--color-primary)" />
+                )}
                 <span style={{ fontSize: 15, fontWeight: 900, color: 'var(--color-primary)' }}>{incNum.toLocaleString('pt-PT')}</span>
                 <ArrowRight size={13} color="var(--color-text-muted)" />
               </div>
               <div style={{ textAlign: 'center', minWidth: 56 }}>
-                <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>Novo Total</p>
-                <p style={{ fontSize: 16, fontWeight: 900, color: 'var(--color-traffic-green)' }}>{newTotal.toLocaleString('pt-PT')}</p>
+                <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>{msAgg === 'LAST' ? 'Novo Valor' : msAgg === 'AVG' ? 'Nova Média' : 'Novo Total'}</p>
+                <p style={{ fontSize: 16, fontWeight: 900, color: 'var(--color-traffic-green)' }}>{newTotal.toLocaleString('pt-PT', { maximumFractionDigits: 2 })}</p>
               </div>
               <div style={{ flex: 2 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>

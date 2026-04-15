@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import Sidebar from './Sidebar'
 import Spinner from '../ui/Spinner'
 import { useNotificationCount } from '../../hooks/useNotificationCount'
+import { useFeedbackCount } from '../../hooks/useFeedbackCount'
 import { geoService } from '../../services/geo.service'
 import { orgService } from '../../services/org.service'
 
@@ -15,7 +16,8 @@ const BREADCRUMBS: Record<string, string[]> = {
   '/analytics/map':          ['DPRP KPIs', 'Analytics', 'Mapa'],
   '/analytics/top-performers': ['DPRP KPIs', 'Analytics', 'Top Performers'],
   '/analytics/benchmark':    ['DPRP KPIs', 'Analytics', 'Benchmark'],
-  '/blockers':               ['DPRP KPIs', 'Impedimentos'],
+  '/feedback':               ['DPRP KPIs', 'Feedback'],
+  '/blockers':               ['DPRP KPIs', 'Constrangimentos'],
   '/org':                    ['DPRP KPIs', 'Organização'],
   '/org/pelouros':           ['DPRP KPIs', 'Organização', 'Pelouros'],
   '/org/direcoes':           ['DPRP KPIs', 'Organização', 'Direcções'],
@@ -39,6 +41,7 @@ function routeToKey(pathname: string) {
 
 export default function AppShell() {
   useNotificationCount()
+  useFeedbackCount()
   const { pathname } = useLocation()
 
   // ── Single source of truth for geo & org data ──────────────────────────
@@ -50,26 +53,20 @@ export default function AppShell() {
   const depts   = useQuery({ queryKey: ['departamentos'],   queryFn: () => orgService.listDepartamentos(), staleTime: Infinity })
   const dirs    = useQuery({ queryKey: ['direcoes'],         queryFn: () => orgService.listDirecoes(),      staleTime: Infinity })
 
-  const loading = ascs.isLoading || regioes.isLoading || depts.isLoading || dirs.isLoading
+  // Non-blocking: render the app immediately, geo/org data loads in background.
+  // Pages that need this data use cache reads and handle their own loading states.
 
   const activeKey = routeToKey(pathname)
   const breadcrumb = BREADCRUMBS[pathname] ?? ['DPRP KPIs']
-
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-        <Spinner size="lg" />
-        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-muted)' }}>A carregar dados…</p>
-      </div>
-    )
-  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg)' }}>
       <Sidebar activeKey={activeKey} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <main style={{ flex: 1, padding: '32px 36px', overflowY: 'auto' }}>
-          <Outlet />
+          <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 60 }}><Spinner size="md" /></div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, FolderKanban, BarChart3, Map, Trophy, GitCompare,
-  Building2, Globe, Users, ShieldAlert, Bell, ClipboardList,
+  Building2, Globe, Users, ShieldAlert, Bell, ClipboardList, MessageSquare,
   ChevronDown, ChevronRight, LogOut,
 } from 'lucide-react'
 import Avatar from '../ui/Avatar'
@@ -21,7 +21,7 @@ interface NavItem {
   icon: React.ReactNode
   path?: string
   children?: NavItem[]
-  badge?: boolean
+  badge?: boolean | 'feedback'
   permission?: string      // if set, item is hidden when can(permission) === false
 }
 
@@ -37,7 +37,8 @@ const NAV: NavItem[] = [
       { key: 'bench',  label: 'Benchmark',        icon: <GitCompare size={14} />,   path: '/analytics/benchmark' },
     ],
   },
-  { key: 'blockers', label: 'Impedimentos', icon: <ShieldAlert size={17} />, path: '/blockers', permission: 'view:operational_nav' },
+  { key: 'feedback', label: 'Feedback', icon: <MessageSquare size={17} />, path: '/feedback', badge: 'feedback' as any },
+  { key: 'blockers', label: 'Constrangimentos', icon: <ShieldAlert size={17} />, path: '/blockers', permission: 'view:operational_nav' },
   {
     key: 'org', label: 'Organização', icon: <Building2 size={17} />, permission: 'view:operational_nav',
     children: [
@@ -66,6 +67,7 @@ export default function Sidebar({ activeKey = '' }: SidebarProps) {
   const user = useAuthStore(s => s.user)
   const clearAuth = useAuthStore(s => s.clearAuth)
   const notificationCount = useUIStore(s => s.notificationCount)
+  const feedbackCount = useUIStore(s => s.feedbackCount)
   const { can } = useAuth()
 
   const { data: backendVersion } = useQuery({
@@ -177,11 +179,14 @@ export default function Sidebar({ activeKey = '' }: SidebarProps) {
             >
               {item.icon}
               <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>
-              {item.badge && notificationCount > 0 && (
-                <span style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 999, minWidth: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>
-                  {notificationCount > 99 ? '99+' : notificationCount}
-                </span>
-              )}
+              {item.badge && (() => {
+                const count = item.badge === 'feedback' ? feedbackCount : notificationCount
+                return count > 0 ? (
+                  <span style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 999, minWidth: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>
+                    {count > 99 ? '99+' : count}
+                  </span>
+                ) : null
+              })()}
             </button>
           )
         })}

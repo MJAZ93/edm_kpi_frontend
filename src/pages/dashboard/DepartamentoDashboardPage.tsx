@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom'
 import {
   ShieldAlert, Clock, Building2, ListTodo, AlertOctagon,
   ChevronRight, UserX, ArrowUpFromLine, TrendingUp,
-  Plus, CheckCircle2, Circle, Trophy, User, History, Paperclip,
+  Plus, CheckCircle2, Circle, Trophy, User, History, Paperclip, MessageSquare, ArrowRight,
 } from 'lucide-react'
 import { dashboardService } from '../../services/dashboard.service'
 import { milestonesService } from '../../services/milestones.service'
+import { feedbackService } from '../../services/feedback.service'
+import type { Feedback } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -66,6 +68,31 @@ function fmtDateTime(d?: string) {
         hour: '2-digit',
         minute: '2-digit',
       })
+}
+
+const FEEDBACK_CATEGORY_LABEL: Record<string, string> = {
+  GENERAL: 'Geral', PERFORMANCE: 'Desempenho', IMPROVEMENT: 'Melhoria', RECOGNITION: 'Reconhecimento',
+}
+
+const FEEDBACK_CATEGORY_COLOR: Record<string, { bg: string; text: string }> = {
+  GENERAL: { bg: 'var(--color-bg-strong)', text: 'var(--color-text-muted)' },
+  PERFORMANCE: { bg: 'var(--color-traffic-yellow-bg)', text: 'var(--color-traffic-yellow)' },
+  IMPROVEMENT: { bg: 'rgba(122,58,237,0.10)', text: '#7c3aed' },
+  RECOGNITION: { bg: 'var(--color-traffic-green-bg)', text: 'var(--color-traffic-green)' },
+}
+
+function timeAgo(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return 'agora'
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d`
+  return date.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit' })
 }
 
 // ── Score ring ────────────────────────────────────────────────────────────────
@@ -154,6 +181,16 @@ export default function DepartamentoDashboardPage() {
     queryFn: dashboardService.getEmployeeRanking,
   })
   const employees: any[] = empData?.ranking ?? []
+
+  const { data: feedbackData } = useQuery({
+    queryKey: ['feedback', 'received', { page: 0, limit: 5 }],
+    queryFn: () => feedbackService.listReceived({ page: 0, limit: 5 }),
+  })
+
+  const { data: unreadData } = useQuery({
+    queryKey: ['feedback', 'unread-count'],
+    queryFn: feedbackService.unreadCount,
+  })
 
   const queryClient = useQueryClient()
   const createMs = useMutation({
@@ -312,7 +349,7 @@ export default function DepartamentoDashboardPage() {
           color={(stats.overdue_milestones ?? 0) > 0 ? 'var(--color-traffic-red-bg)' : 'var(--color-bg-strong)'}
         />
         <StatCard
-          label="Impedimentos Pendentes"
+          label="Constrangimentos Pendentes"
           value={blockers.length}
           icon={<ShieldAlert size={17} />}
           color={blockers.length > 0 ? 'var(--color-traffic-red-bg)' : 'var(--color-bg-strong)'}
@@ -897,7 +934,7 @@ export default function DepartamentoDashboardPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                 <ShieldAlert size={15} style={{ color: 'var(--color-traffic-red)' }} />
                 <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Impedimentos
+                  Constrangimentos
                 </p>
                 {blockers.length > 0 && (
                   <Badge variant="danger" style={{ marginLeft: 4 }}>{blockers.length}</Badge>
@@ -907,7 +944,7 @@ export default function DepartamentoDashboardPage() {
               {blockers.length === 0 ? (
                 <div style={{ padding: '24px 0', textAlign: 'center' }}>
                   <ShieldAlert size={28} style={{ color: 'var(--color-traffic-green)', marginBottom: 8, opacity: 0.7 }} />
-                  <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Sem impedimentos pendentes</p>
+                  <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Sem constrangimentos pendentes</p>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -956,7 +993,7 @@ export default function DepartamentoDashboardPage() {
                   onClick={() => navigate('/blockers')}
                   style={{ width: '100%', marginTop: 12, padding: '8px 0', background: 'none', border: '1px solid var(--color-border)', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
-                  Ver todos os impedimentos <ChevronRight size={13} />
+                  Ver todos os constrangimentos <ChevronRight size={13} />
                 </button>
               )}
             </Card>
@@ -967,12 +1004,12 @@ export default function DepartamentoDashboardPage() {
       {/* ── Blockers + Ranking ───────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
-        {/* Impedimentos */}
+        {/* Constrangimentos */}
         <Card variant="elevated">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <ShieldAlert size={15} style={{ color: 'var(--color-traffic-red)' }} />
             <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Impedimentos Pendentes
+              Constrangimentos Pendentes
             </p>
             {blockers.length > 0 && <Badge variant="danger" style={{ marginLeft: 4 }}>{blockers.length}</Badge>}
           </div>
@@ -980,7 +1017,7 @@ export default function DepartamentoDashboardPage() {
           {blockers.length === 0 ? (
             <div style={{ padding: '24px 0', textAlign: 'center' }}>
               <ShieldAlert size={28} style={{ color: 'var(--color-traffic-green)', opacity: 0.6, marginBottom: 8 }} />
-              <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Sem impedimentos pendentes</p>
+              <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Sem constrangimentos pendentes</p>
             </div>
           ) : (
             <>
@@ -1193,6 +1230,94 @@ export default function DepartamentoDashboardPage() {
           </div>
         )}
       </Modal>
+
+      {/* ── Feedback Recente ──────────────────────────────────────────────────── */}
+      <Card variant="elevated">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <MessageSquare size={15} style={{ color: 'var(--color-primary)' }} />
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Feedback Recente
+            </p>
+            {(unreadData?.count ?? 0) > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: '#fff', background: 'var(--color-primary)',
+                borderRadius: 10, padding: '2px 8px', minWidth: 18, textAlign: 'center',
+              }}>
+                {unreadData!.count}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => navigate('/feedback')}
+            style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            Ver todos <ArrowRight size={13} />
+          </button>
+        </div>
+
+        {!feedbackData?.data?.length ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--color-text-muted)', fontSize: 13 }}>
+            <MessageSquare size={28} style={{ opacity: 0.3, marginBottom: 8 }} />
+            <p>Sem feedback recente</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {feedbackData.data.slice(0, 5).map((fb: Feedback) => {
+              const catColor = FEEDBACK_CATEGORY_COLOR[fb.category] ?? FEEDBACK_CATEGORY_COLOR.GENERAL
+              return (
+                <div
+                  key={fb.id}
+                  onClick={() => navigate('/feedback')}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 10,
+                    background: 'var(--color-bg-strong)',
+                    cursor: 'pointer',
+                    transition: 'border-color 150ms',
+                    border: '1.5px solid transparent',
+                    borderLeft: !fb.is_read ? '3px solid var(--color-primary)' : '3px solid transparent',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'transparent'; if (!fb.is_read) (e.currentTarget as HTMLElement).style.borderLeftColor = 'var(--color-primary)' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        background: 'var(--color-primary)', color: '#fff',
+                        fontSize: 11, fontWeight: 800,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {(fb.sender?.name ?? '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)' }}>{fb.sender?.name ?? 'Utilizador'}</p>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 5,
+                          background: catColor.bg, color: catColor.text,
+                        }}>
+                          {FEEDBACK_CATEGORY_LABEL[fb.category] ?? fb.category}
+                        </span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', flexShrink: 0, fontWeight: 600 }}>
+                      {timeAgo(fb.created_at)}
+                    </span>
+                  </div>
+                  <p style={{
+                    fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.4,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    fontWeight: fb.is_read ? 400 : 600,
+                  }}>
+                    {fb.message}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Card>
 
       {/* ── Map ──────────────────────────────────────────────────────────────── */}
       <Card variant="elevated">

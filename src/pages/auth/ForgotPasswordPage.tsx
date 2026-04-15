@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
           <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-deep) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', boxShadow: '0 8px 24px rgba(232,103,10,0.35)' }}>
             <Zap size={24} color="#fff" fill="#fff" />
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--color-text)' }}>CommV</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--color-text)' }}>DPRP KPIs</h1>
         </div>
 
         <div style={{ background: 'var(--color-surface-strong)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-strong)', border: '1px solid var(--color-border)', padding: 36 }}>

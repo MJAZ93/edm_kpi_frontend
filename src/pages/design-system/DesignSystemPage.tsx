@@ -306,7 +306,7 @@ export default function DesignSystemPage() {
                       { value: 'monthly', label: 'Mensal' }, { value: 'quarterly', label: 'Trimestral' },
                       { value: 'annual', label: 'Anual' },
                     ]} />
-                  <Textarea label="Notas" placeholder="Descreva o impedimento ou contexto…" rows={4} />
+                  <Textarea label="Notas" placeholder="Descreva o constrangimento ou contexto…" rows={4} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <Checkbox checked={checked1} onChange={setChecked1} label="Incluir indicadores bloqueados" />
                     <Checkbox checked={checked2} onChange={setChecked2} label="Notificar responsável acima" />
@@ -417,7 +417,7 @@ export default function DesignSystemPage() {
               <StatCard label="Total Pilares Estratégicos" value="12" delta={8} deltaLabel="vs mês anterior" icon={<FolderKanban size={18} />} />
               <StatCard label="Indicadores Feitos" value="120" delta={15} deltaLabel="vs mês anterior" icon={<CheckCircle2 size={18} />} color="var(--color-green-soft)" />
               <StatCard label="Score Empresa" value="70.7" delta={-3} deltaLabel="vs mês anterior" icon={<BarChart3 size={18} />} color="var(--color-traffic-yellow-bg)" />
-              <StatCard label="Impedimentos" value="4" delta={-2} deltaLabel="resolvidos" icon={<ShieldAlert size={18} />} color="var(--color-traffic-red-bg)" />
+              <StatCard label="Constrangimentos" value="4" delta={-2} deltaLabel="resolvidos" icon={<ShieldAlert size={18} />} color="var(--color-traffic-red-bg)" />
             </Grid>
           </Section>
 
@@ -481,7 +481,7 @@ export default function DesignSystemPage() {
               { key: 'projects', label: 'Pilares Estratégicos' },
               { key: 'tasks', label: 'Acções' },
               { key: 'indicadores', label: 'Indicadores' },
-              { key: 'blockers', label: 'Impedimentos' },
+              { key: 'blockers', label: 'Constrangimentos' },
               { key: 'leaderboard', label: 'Leaderboard' },
             ]}>
               {(active) => {

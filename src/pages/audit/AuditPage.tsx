@@ -16,7 +16,7 @@ const ENTITY_OPTS = [
   { value: 'PROJECT', label: 'Pilar Estratégico' },
   { value: 'TASK', label: 'Acção' },
   { value: 'MILESTONE', label: 'Indicador' },
-  { value: 'BLOCKER', label: 'Impedimento' },
+  { value: 'BLOCKER', label: 'Constrangimento' },
   { value: 'USER', label: 'Utilizador' },
   { value: 'PELOURO', label: 'Pelouro' },
   { value: 'DIRECAO', label: 'Direcção' },

@@ -24,9 +24,34 @@ export const projectsService = {
   update: (id: number, payload: Partial<CreateProjectPayload>) =>
     api.put<Project>(`/private/projects/${id}`, payload).then(r => r.data),
 
-  updateProgress: (id: number, currentValue: number) =>
-    api.patch<Project>(`/private/projects/${id}/progress`, { current_value: currentValue }).then(r => r.data),
+  updateProgress: (id: number, currentValue: number, periodReference?: string) =>
+    api.patch<Project>(`/private/projects/${id}/progress`, { current_value: currentValue, period_reference: periodReference }).then(r => r.data),
 
   remove: (id: number) =>
     api.delete(`/private/projects/${id}`).then(r => r.data),
+
+  // ── Project History ──────────────────────────────────────────────────────
+  listHistory: (projectId: number) =>
+    api.get<{ entries: ProjectHistoryEntry[] }>(`/private/projects/${projectId}/history`).then(r => r.data),
+
+  createHistory: (projectId: number, payload: { value: number; period_reference: string; notes?: string }) =>
+    api.post<ProjectHistoryEntry>(`/private/projects/${projectId}/history`, payload).then(r => r.data),
+
+  updateHistory: (entryId: number, payload: { value?: number; notes?: string }) =>
+    api.put<ProjectHistoryEntry>(`/private/projects/history/${entryId}`, payload).then(r => r.data),
+
+  deleteHistory: (entryId: number) =>
+    api.delete(`/private/projects/history/${entryId}`).then(r => r.data),
+}
+
+export interface ProjectHistoryEntry {
+  id: number
+  project_id: number
+  value: number
+  period_reference: string
+  notes?: string
+  created_by: number
+  creator?: { name: string }
+  created_at: string
+  updated_at: string
 }

@@ -60,8 +60,8 @@ export default function BlockersPage() {
     <div>
       <PageHeader
         eyebrow="Gestão"
-        title="Impedimentos"
-        subtitle={`${data?.total ?? 0} impedimentos registados`}
+        title="Constrangimentos"
+        subtitle={`${data?.total ?? 0} constrangimentos registados`}
         badges={
           <Badge variant="warning" dot>
             {data?.data?.filter(b => b.status === 'PENDING').length ?? 0} pendentes
@@ -80,7 +80,7 @@ export default function BlockersPage() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>
       ) : blockers.length === 0 ? (
         <Card style={{ textAlign: 'center', padding: 60 }}>
-          <p style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>Sem impedimentos para este filtro.</p>
+          <p style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>Sem constrangimentos para este filtro.</p>
         </Card>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
@@ -99,7 +99,7 @@ export default function BlockersPage() {
         </div>
       )}
 
-      <Modal open={!!rejectId} onClose={() => setRejectId(null)} title="Rejeitar impedimento" width={440}
+      <Modal open={!!rejectId} onClose={() => setRejectId(null)} title="Rejeitar constrangimento" width={440}
         footer={
           <>
             <Button variant="secondary" onClick={() => setRejectId(null)}>Cancelar</Button>

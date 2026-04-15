@@ -32,4 +32,7 @@ export const milestonesService = {
 
   listProgress: (id: number) =>
     api.get<{ events: MilestoneProgressEvent[]; total: number }>(`/private/milestones/${id}/progress`).then(r => r.data),
+
+  updateProgress: (progressId: number, payload: { increment_value?: number; notes?: string }) =>
+    api.put<{ progress: any; new_achieved: number }>(`/private/milestones/progress/${progressId}`, payload).then(r => r.data),
 }

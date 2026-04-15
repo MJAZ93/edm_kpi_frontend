@@ -143,7 +143,7 @@ export interface TaskScope {
   scope_name?: string
 }
 
-export type AggregationType = 'SUM_UP' | 'SUM_DOWN' | 'AVG' | 'LAST'
+export type AggregationType = 'SUM_UP' | 'SUM_DOWN' | 'AVG' | 'LAST' | 'MANUAL'
 
 export interface Task {
   id: number
@@ -184,6 +184,7 @@ export interface Milestone {
   frequency?: Frequency
   planned_value: number
   achieved_value?: number
+  aggregation_type?: AggregationType
   planned_date: string
   achieved_date?: string
   status: MilestoneStatus
@@ -442,6 +443,30 @@ export interface AuditEntry {
   created_at: string
 }
 
+// ── Feedback ─────────────────────────────────────────────────────────────────
+
+export type FeedbackCategory = 'GENERAL' | 'PERFORMANCE' | 'IMPROVEMENT' | 'RECOGNITION'
+
+export type FeedbackTargetType = 'DEPARTAMENTO' | 'DIRECAO' | 'PELOURO' | 'USER' | 'PROJECT' | 'TASK' | 'MILESTONE'
+
+export interface Feedback {
+  id: number
+  sender_id: number
+  sender: Pick<User, 'id' | 'name' | 'email' | 'role'>
+  receiver_id: number
+  receiver: Pick<User, 'id' | 'name' | 'email' | 'role'>
+  parent_id: number | null
+  target_type?: FeedbackTargetType
+  target_id?: number
+  target_name?: string
+  message: string
+  category: FeedbackCategory
+  is_read: boolean
+  replies: Feedback[]
+  created_at: string
+  updated_at: string
+}
+
 // ── API Pagination ────────────────────────────────────────────────────────────
 
 export interface PaginatedResponse<T> {
@@ -488,6 +513,7 @@ export interface CreateTaskPayload {
   start_value: number
   target_value: number
   aggregation_type?: AggregationType
+  current_value?: number
   weight: number
   start_date: string
   end_date: string
@@ -505,6 +531,7 @@ export interface CreateMilestonePayload {
   planned_date: string
   notes?: string
   assigned_to?: number
+  aggregation_type?: AggregationType
 }
 
 export interface UpdateMilestonePayload {
@@ -520,6 +547,7 @@ export interface UpdateMilestonePayload {
   planned_value?: number
   planned_date?: string
   assigned_to?: number
+  aggregation_type?: AggregationType
 }
 
 export interface CreateBlockerPayload {

@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom'
 import {
   FolderKanban, ShieldAlert, TrendingUp, Trophy, ChevronRight,
   AlertOctagon, Users, Building2, Layers, Clock, Activity,
-  ListChecks, CheckCircle2, Circle,
+  ListChecks, CheckCircle2, Circle, MessageSquare, ArrowRight,
 } from 'lucide-react'
 import { dashboardService } from '../../services/dashboard.service'
 import { milestonesService } from '../../services/milestones.service'
+import { feedbackService } from '../../services/feedback.service'
+import type { Feedback } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -42,6 +44,31 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const MEDALS = ['🥇', '🥈', '🥉']
+
+const FEEDBACK_CATEGORY_LABEL: Record<string, string> = {
+  GENERAL: 'Geral', PERFORMANCE: 'Desempenho', IMPROVEMENT: 'Melhoria', RECOGNITION: 'Reconhecimento',
+}
+
+const FEEDBACK_CATEGORY_COLOR: Record<string, { bg: string; text: string }> = {
+  GENERAL: { bg: 'var(--color-bg-strong)', text: 'var(--color-text-muted)' },
+  PERFORMANCE: { bg: 'var(--color-traffic-yellow-bg)', text: 'var(--color-traffic-yellow)' },
+  IMPROVEMENT: { bg: 'rgba(122,58,237,0.10)', text: '#7c3aed' },
+  RECOGNITION: { bg: 'var(--color-traffic-green-bg)', text: 'var(--color-traffic-green)' },
+}
+
+function timeAgo(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return 'agora'
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d`
+  return date.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit' })
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   DIR_DIRECAO:  'Dir. Direcção',
@@ -133,6 +160,16 @@ export default function DirecaoDashboardPage() {
   const { data: empData } = useQuery({
     queryKey: ['dashboard', 'employee-ranking'],
     queryFn: dashboardService.getEmployeeRanking,
+  })
+
+  const { data: feedbackData } = useQuery({
+    queryKey: ['feedback', 'received', { page: 0, limit: 5 }],
+    queryFn: () => feedbackService.listReceived({ page: 0, limit: 5 }),
+  })
+
+  const { data: unreadData } = useQuery({
+    queryKey: ['feedback', 'unread-count'],
+    queryFn: feedbackService.unreadCount,
   })
 
   // ── Derived ──────────────────────────────────────────────────────────────────
@@ -233,7 +270,7 @@ export default function DirecaoDashboardPage() {
           color={stalled.length > 0 ? 'var(--color-traffic-red-bg)' : 'var(--color-bg-strong)'}
         />
         <StatCard
-          label="Impedimentos Pendentes"
+          label="Constrangimentos Pendentes"
           value={blockers.length}
           icon={<ShieldAlert size={17} />}
           color={blockers.length > 0 ? 'var(--color-traffic-red-bg)' : 'var(--color-bg-strong)'}
@@ -458,40 +495,64 @@ export default function DirecaoDashboardPage() {
         </Card>
       )}
 
-      {/* ── Departments performance ───────────────────────────────────────────── */}
+      {/* ── Department Overview Cards ────────────────────────────────────────── */}
       {deptScores.length > 0 && (
         <Card variant="elevated">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <Layers size={15} style={{ color: 'var(--color-primary)' }} />
-            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Departamentos
-            </p>
-            <Badge variant="default" style={{ marginLeft: 4 }}>{deptScores.length}</Badge>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Layers size={15} style={{ color: 'var(--color-primary)' }} />
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Departamentos
+              </p>
+              <Badge variant="default" style={{ marginLeft: 4 }}>{deptScores.length}</Badge>
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Clique para ver as acções do departamento</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
             {deptScores.map((dept: any) => {
               const dtl = (dept.traffic_light ?? 'YELLOW') as TL
               const dc  = TL_COLORS[dtl]
+              // Count blockers for this department (matching entity from blockers array)
+              const deptBlockerCount = blockers.filter((bl: any) =>
+                (bl.entity_title ?? '').toLowerCase().includes(dept.name?.toLowerCase() ?? '')
+              ).length
+              // Count stalled tasks potentially from this department
+              const deptStalledCount = stalled.filter((t: any) =>
+                (t.project_title ?? '').toLowerCase().includes(dept.name?.toLowerCase() ?? '')
+              ).length
               return (
                 <div
                   key={dept.id}
+                  onClick={() => navigate(`/projects?dept=${dept.id}`)}
                   style={{
-                    padding: '14px 16px',
-                    borderRadius: 12,
+                    padding: '16px 18px',
+                    borderRadius: 14,
                     background: dc.bg,
                     border: `2px solid ${dc.border}44`,
-                    transition: 'border-color 150ms',
-                    cursor: 'default',
+                    transition: 'all 150ms ease',
+                    cursor: 'pointer',
                   }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = dc.border; el.style.boxShadow = `0 4px 16px ${dc.border}22` }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = `${dc.border}44`; el.style.boxShadow = 'none' }}
                 >
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: dc.border, marginBottom: 10 }} />
-                  <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-text)', marginBottom: 8, lineHeight: 1.3 }}>
+                  {/* Header: dot + traffic light */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: dc.border, flexShrink: 0 }} />
+                    <ChevronRight size={14} style={{ color: 'var(--color-text-muted)' }} />
+                  </div>
+
+                  {/* Name */}
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', marginBottom: 10, lineHeight: 1.3 }}>
                     {dept.name}
                   </p>
-                  <p style={{ fontSize: 26, fontWeight: 900, color: dc.text, lineHeight: 1, marginBottom: 6 }}>
+
+                  {/* Score */}
+                  <p style={{ fontSize: 28, fontWeight: 900, color: dc.text, lineHeight: 1, marginBottom: 8 }}>
                     {dept.total_score.toFixed(1)}
                   </p>
-                  <div style={{ display: 'flex', gap: 6 }}>
+
+                  {/* Execution + Goal */}
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
                     <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>
                       Exec {dept.execution_score.toFixed(0)}%
                     </span>
@@ -500,10 +561,166 @@ export default function DirecaoDashboardPage() {
                       Obj {dept.goal_score.toFixed(0)}%
                     </span>
                   </div>
+
+                  {/* Progress bar */}
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ height: 5, borderRadius: 999, background: 'var(--color-border)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, dept.execution_score)}%`, borderRadius: 999, background: dc.border, transition: 'width 500ms' }} />
+                    </div>
+                  </div>
+
+                  {/* Alert badges */}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {deptStalledCount > 0 && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                        background: 'var(--color-traffic-red-bg)', color: 'var(--color-traffic-red)',
+                        display: 'flex', alignItems: 'center', gap: 3,
+                      }}>
+                        <AlertOctagon size={9} /> {deptStalledCount} parada{deptStalledCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {deptBlockerCount > 0 && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                        background: 'var(--color-traffic-red-bg)', color: 'var(--color-traffic-red)',
+                        display: 'flex', alignItems: 'center', gap: 3,
+                      }}>
+                        <ShieldAlert size={9} /> {deptBlockerCount} constrang.
+                      </span>
+                    )}
+                  </div>
                 </div>
               )
             })}
           </div>
+        </Card>
+      )}
+
+      {/* ── Tasks que Precisam de Atenção ─────────────────────────────────────── */}
+      {(stalled.length > 0 || blockers.length > 0) && (
+        <Card variant="elevated">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <AlertOctagon size={15} style={{ color: 'var(--color-traffic-red)' }} />
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Acções que Precisam de Atenção
+            </p>
+            <Badge variant="danger" style={{ marginLeft: 4 }}>{stalled.length + blockers.length}</Badge>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
+            {/* Stalled tasks */}
+            {stalled.map((task: any) => (
+              <div
+                key={`stalled-${task.id}`}
+                onClick={() => navigate('/projects')}
+                style={{
+                  padding: '14px 16px',
+                  borderRadius: 12,
+                  background: 'var(--color-traffic-red-bg)',
+                  border: '1.5px solid rgba(220,38,38,0.18)',
+                  cursor: 'pointer',
+                  transition: 'border-color 150ms',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-traffic-red)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(220,38,38,0.18)' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', flex: 1, lineHeight: 1.35 }}>
+                    {task.title}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '2px 8px', borderRadius: 6, background: 'rgba(220,38,38,0.12)' }}>
+                    <Clock size={10} style={{ color: 'var(--color-traffic-red)' }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-traffic-red)' }}>
+                      {task.days_elapsed}d sem progresso
+                    </span>
+                  </div>
+                </div>
+                {task.project_title && (
+                  <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 6, fontStyle: 'italic' }}>
+                    {task.project_title}
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                    background: 'rgba(220,38,38,0.12)', color: 'var(--color-traffic-red)',
+                  }}>
+                    Parada
+                  </span>
+                  <ProgressBar value={task.progress_pct ?? 0} max={100} height={4} variant="red" />
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-traffic-red)', flexShrink: 0 }}>
+                    {(task.progress_pct ?? 0).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {/* Tasks with active blockers */}
+            {blockers.map((bl: any) => (
+              <div
+                key={`blocker-${bl.id}`}
+                onClick={() => navigate('/blockers')}
+                style={{
+                  padding: '14px 16px',
+                  borderRadius: 12,
+                  background: 'var(--color-bg-strong)',
+                  border: `1.5px solid ${BLOCKER_COLORS[bl.blocker_type] ?? '#4a6fa5'}33`,
+                  cursor: 'pointer',
+                  transition: 'border-color 150ms',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = `${BLOCKER_COLORS[bl.blocker_type] ?? '#4a6fa5'}88` }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = `${BLOCKER_COLORS[bl.blocker_type] ?? '#4a6fa5'}33` }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', flex: 1, lineHeight: 1.35 }}>
+                    {bl.entity_title || '—'}
+                  </p>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+                    color: '#fff', background: BLOCKER_COLORS[bl.blocker_type] ?? '#4a6fa5', borderRadius: 5, padding: '2px 7px', flexShrink: 0,
+                  }}>
+                    {BLOCKER_LABEL[bl.blocker_type] ?? bl.blocker_type}
+                  </span>
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 6 }}>
+                  {bl.description}
+                </p>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                    background: 'var(--color-traffic-yellow-bg)', color: 'var(--color-traffic-yellow)',
+                  }}>
+                    Constrangimento Pendente
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+                    {bl.entity_type === 'TASK' ? 'Acção' : 'Indicador'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {(stalled.length + blockers.length) > 0 && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              {stalled.length > 0 && (
+                <button
+                  onClick={() => navigate('/projects')}
+                  style={{ flex: 1, padding: '8px 0', background: 'none', border: '1px solid var(--color-border)', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                >
+                  Ver acções paradas <ChevronRight size={13} />
+                </button>
+              )}
+              {blockers.length > 0 && (
+                <button
+                  onClick={() => navigate('/blockers')}
+                  style={{ flex: 1, padding: '8px 0', background: 'none', border: '1px solid var(--color-border)', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                >
+                  Ver constrangimentos <ChevronRight size={13} />
+                </button>
+              )}
+            </div>
+          )}
         </Card>
       )}
 
@@ -578,155 +795,200 @@ export default function DirecaoDashboardPage() {
       </Card>
 
 
-      {/* ── Stalled tasks + Blockers ──────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
-        {/* Stalled tasks */}
-        <Card variant="elevated">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <AlertOctagon size={15} style={{ color: 'var(--color-traffic-red)' }} />
+      {/* ── Feedback Recente ──────────────────────────────────────────────────── */}
+      <Card variant="elevated">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <MessageSquare size={15} style={{ color: 'var(--color-primary)' }} />
             <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Acções Paradas
+              Feedback Recente
             </p>
-            {stalled.length > 0 && (
-              <Badge variant="danger" style={{ marginLeft: 4 }}>{stalled.length}</Badge>
+            {(unreadData?.count ?? 0) > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 800, color: '#fff', background: 'var(--color-primary)',
+                borderRadius: 10, padding: '2px 8px', minWidth: 18, textAlign: 'center',
+              }}>
+                {unreadData!.count}
+              </span>
             )}
           </div>
+          <button
+            onClick={() => navigate('/feedback')}
+            style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            Ver todos <ArrowRight size={13} />
+          </button>
+        </div>
 
-          {stalled.length === 0 ? (
-            <div style={{ padding: '24px 0', textAlign: 'center' }}>
-              <TrendingUp size={28} style={{ color: 'var(--color-traffic-green)', marginBottom: 8, opacity: 0.7 }} />
-              <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Sem acções paradas</p>
-              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>Todos os indicadores estão a progredir</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
-              {stalled.slice(0, 6).map((task: any) => (
+        {!feedbackData?.data?.length ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--color-text-muted)', fontSize: 13 }}>
+            <MessageSquare size={28} style={{ opacity: 0.3, marginBottom: 8 }} />
+            <p>Sem feedback recente</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {feedbackData.data.slice(0, 5).map((fb: Feedback) => {
+              const catColor = FEEDBACK_CATEGORY_COLOR[fb.category] ?? FEEDBACK_CATEGORY_COLOR.GENERAL
+              return (
                 <div
-                  key={task.id}
-                  onClick={() => navigate(`/projects`)}
+                  key={fb.id}
+                  onClick={() => navigate('/feedback')}
                   style={{
                     padding: '12px 14px',
                     borderRadius: 10,
-                    background: 'var(--color-traffic-red-bg)',
-                    border: '1.5px solid rgba(220,38,38,0.18)',
+                    background: 'var(--color-bg-strong)',
                     cursor: 'pointer',
                     transition: 'border-color 150ms',
+                    border: '1.5px solid transparent',
+                    borderLeft: !fb.is_read ? '3px solid var(--color-primary)' : '3px solid transparent',
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-traffic-red)' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(220,38,38,0.18)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'transparent'; if (!fb.is_read) (e.currentTarget as HTMLElement).style.borderLeftColor = 'var(--color-primary)' }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                    <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', flex: 1, lineHeight: 1.35 }}>
-                      {task.title}
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '2px 8px', borderRadius: 6, background: 'rgba(220,38,38,0.12)' }}>
-                      <Clock size={10} style={{ color: 'var(--color-traffic-red)' }} />
-                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-traffic-red)' }}>
-                        {task.days_elapsed}d
-                      </span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        background: 'var(--color-primary)', color: '#fff',
+                        fontSize: 11, fontWeight: 800,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {(fb.sender?.name ?? '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)' }}>{fb.sender?.name ?? 'Utilizador'}</p>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 5,
+                          background: catColor.bg, color: catColor.text,
+                        }}>
+                          {FEEDBACK_CATEGORY_LABEL[fb.category] ?? fb.category}
+                        </span>
+                      </div>
                     </div>
+                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', flexShrink: 0, fontWeight: 600 }}>
+                      {timeAgo(fb.created_at)}
+                    </span>
                   </div>
-                  {task.project_title && (
-                    <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 5, fontStyle: 'italic' }}>
-                      {task.project_title}
-                    </p>
-                  )}
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 10, color: 'var(--color-traffic-red)', fontWeight: 700 }}>Sem progresso</span>
-                      <span style={{ fontSize: 10, color: 'var(--color-traffic-red)', fontWeight: 700 }}>0%</span>
+                  <p style={{
+                    fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.4,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    fontWeight: fb.is_read ? 400 : 600,
+                  }}>
+                    {fb.message}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Recent Activity ──────────────────────────────────────────────────── */}
+      <Card variant="elevated">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <Activity size={15} style={{ color: 'var(--color-primary)' }} />
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Actividade Recente
+          </p>
+        </div>
+
+        {(() => {
+          // Build a unified activity feed from available data
+          const activities: { id: string; type: string; title: string; subtitle: string; color: string; icon: 'stalled' | 'blocker' | 'task' | 'dept'; time?: string }[] = []
+
+          // Stalled tasks as activity items
+          stalled.forEach((t: any) => {
+            activities.push({
+              id: `stalled-${t.id}`,
+              type: 'Acção parada',
+              title: t.title,
+              subtitle: t.project_title ? `${t.project_title} · ${t.days_elapsed}d sem progresso` : `${t.days_elapsed}d sem progresso`,
+              color: 'var(--color-traffic-red)',
+              icon: 'stalled',
+            })
+          })
+
+          // Blockers as activity items
+          blockers.forEach((bl: any) => {
+            activities.push({
+              id: `blocker-${bl.id}`,
+              type: `Constrangimento ${BLOCKER_LABEL[bl.blocker_type] ?? bl.blocker_type}`,
+              title: bl.entity_title || 'Sem titulo',
+              subtitle: bl.description,
+              color: BLOCKER_COLORS[bl.blocker_type] ?? '#4a6fa5',
+              icon: 'blocker',
+              time: bl.created_at,
+            })
+          })
+
+          // Dir tasks with pending milestones
+          dirTasks.forEach((t: any) => {
+            const pending = (t.indicadores ?? t.milestones ?? []).filter((m: any) => m.status === 'PENDING').length
+            if (pending > 0) {
+              activities.push({
+                id: `task-${t.id}`,
+                type: 'Marcos pendentes',
+                title: t.title,
+                subtitle: `${pending} marco${pending !== 1 ? 's' : ''} por actualizar`,
+                color: 'var(--color-primary)',
+                icon: 'task',
+              })
+            }
+          })
+
+          if (activities.length === 0) {
+            return (
+              <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--color-text-muted)', fontSize: 13 }}>
+                <Activity size={28} style={{ opacity: 0.3, marginBottom: 8 }} />
+                <p>Sem actividade recente registada</p>
+              </div>
+            )
+          }
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {activities.slice(0, 8).map((act, i, arr) => (
+                <div
+                  key={act.id}
+                  style={{
+                    display: 'flex', gap: 12, padding: '12px 0',
+                    borderBottom: i < arr.length - 1 ? '1px solid var(--color-border)' : 'none',
+                  }}
+                >
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                    background: `${act.color}15`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {act.icon === 'stalled' && <AlertOctagon size={14} style={{ color: act.color }} />}
+                    {act.icon === 'blocker' && <ShieldAlert size={14} style={{ color: act.color }} />}
+                    {act.icon === 'task' && <ListChecks size={14} style={{ color: act.color }} />}
+                    {act.icon === 'dept' && <Building2 size={14} style={{ color: act.color }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: act.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {act.type}
+                      </span>
+                      {act.time && (
+                        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+                          {timeAgo(act.time)}
+                        </span>
+                      )}
                     </div>
-                    <ProgressBar value={0} max={100} height={4} variant="red" />
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {act.title}
+                    </p>
+                    <p style={{ fontSize: 11, color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {act.subtitle}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-          {stalled.length > 6 && (
-            <button
-              onClick={() => navigate('/projects')}
-              style={{
-                marginTop: 12, width: '100%', padding: '8px 0', borderRadius: 8,
-                border: '1.5px solid var(--color-border)', background: 'none', cursor: 'pointer',
-                fontSize: 12, fontWeight: 700, color: 'var(--color-primary)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-              }}
-            >
-              Ver todos ({stalled.length}) <ChevronRight size={13} />
-            </button>
-          )}
-        </Card>
-
-        {/* Pending blockers */}
-        <Card variant="elevated">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <ShieldAlert size={15} style={{ color: 'var(--color-traffic-red)' }} />
-            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Impedimentos Pendentes
-            </p>
-            {blockers.length > 0 && (
-              <Badge variant="danger" style={{ marginLeft: 4 }}>{blockers.length}</Badge>
-            )}
-          </div>
-
-          {blockers.length === 0 ? (
-            <div style={{ padding: '24px 0', textAlign: 'center' }}>
-              <ShieldAlert size={28} style={{ color: 'var(--color-traffic-green)', marginBottom: 8, opacity: 0.7 }} />
-              <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Sem impedimentos pendentes</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {blockers.map((bl: any) => {
-                const color = BLOCKER_COLORS[bl.blocker_type] ?? '#4a6fa5'
-                return (
-                  <div
-                    key={bl.id}
-                    onClick={() => navigate('/blockers')}
-                    style={{
-                      padding: '12px 14px',
-                      borderRadius: 10,
-                      background: 'var(--color-bg-strong)',
-                      border: `1.5px solid ${color}33`,
-                      cursor: 'pointer',
-                      transition: 'border-color 150ms',
-                    }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = `${color}88` }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = `${color}33` }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
-                        color: '#fff', background: color, borderRadius: 5, padding: '2px 7px',
-                      }}>
-                        {BLOCKER_LABEL[bl.blocker_type] ?? bl.blocker_type}
-                      </span>
-                      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600, marginLeft: 'auto' }}>
-                        {bl.entity_type}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)', marginBottom: 4, lineHeight: 1.3 }}>
-                      {bl.entity_title || '—'}
-                    </p>
-                    <p style={{ fontSize: 12, color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {bl.description}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {blockers.length > 0 && (
-            <button
-              onClick={() => navigate('/blockers')}
-              style={{ width: '100%', marginTop: 12, padding: '8px 0', background: 'none', border: '1px solid var(--color-border)', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-            >
-              Ver todos os impedimentos <ChevronRight size={13} />
-            </button>
-          )}
-        </Card>
-      </div>
+          )
+        })()}
+      </Card>
 
       {/* ── Map ──────────────────────────────────────────────────────────────── */}
       <Card variant="elevated">

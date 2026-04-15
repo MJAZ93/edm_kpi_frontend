@@ -1,5 +1,5 @@
 import React from 'react'
-import { Calendar, MapPin, Camera, AlertOctagon, User, Pencil, Eye } from 'lucide-react'
+import { Calendar, MapPin, Camera, AlertOctagon, User, Pencil, Eye, MessageSquare } from 'lucide-react'
 import Card from '../ui/Card'
 import Badge from '../ui/Badge'
 import ProgressBar from '../ui/ProgressBar'
@@ -21,9 +21,12 @@ interface IndicadorCardProps {
   isReduction?: boolean
   /** Task start value — used for reduction goal progress: ((start-achieved)/(start-planned))*100 */
   taskStartValue?: number
+  /** Aggregation type (SUM_UP, AVG, LAST, MANUAL) — shown as badge */
+  aggregationType?: string
   onViewDetails?: () => void
   onUpdate?: () => void
   onEdit?: () => void
+  onFeedback?: () => void
 }
 
 function fmtDate(d?: string) {
@@ -47,17 +50,22 @@ const frequencyMap: Record<string, string> = {
   ANNUAL: 'Anual',
 }
 
-export default function IndicadorCard({ title, scopeLabel, frequency, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, assigneeName, isReduction, taskStartValue, onViewDetails, onUpdate, onEdit }: IndicadorCardProps) {
-  // Reduction: compare achieved vs monthly target
-  //   planned=21.3, achieved=21.3 → 100% (hit the target)
-  //   planned=21.3, achieved=19.0 → 100% (beat target, cap)
-  //   planned=21.3, achieved=24.4 → -14.6% (exceeded losses by 14.6%)
-  // Growth: achieved/planned as before
+const AGG_LABELS: Record<string, string> = {
+  SUM_UP: 'Somatório',
+  SUM_DOWN: 'Decrescente',
+  AVG: 'Média',
+  LAST: 'Último Valor',
+  MANUAL: 'Manual',
+}
+
+export default function IndicadorCard({ title, scopeLabel, frequency, plannedValue, achievedValue, plannedDate, achievedDate, status, hasPhoto, hasBlocker, notes, assigneeName, isReduction, taskStartValue, aggregationType, onViewDetails, onUpdate, onEdit, onFeedback }: IndicadorCardProps) {
+  // Reduction goal: lower is better → achieved/planned when under target, negative when over.
+  // Growth goal: higher is better → achieved/planned capped at 100%.
   let pct = 0
   if (achievedValue !== undefined && plannedValue > 0) {
     if (isReduction) {
       pct = achievedValue <= plannedValue
-        ? 100
+        ? Math.min(100, (achievedValue / plannedValue) * 100)
         : -((achievedValue - plannedValue) / plannedValue) * 100
     } else {
       pct = Math.min(100, (achievedValue / plannedValue) * 100)
@@ -85,7 +93,8 @@ export default function IndicadorCard({ title, scopeLabel, frequency, plannedVal
             <Badge variant={variant} dot>{label}</Badge>
             {scopeLabel && <Badge variant="info"><MapPin size={10} style={{ marginRight: 2 }} />{scopeLabel}</Badge>}
             {frequency && <Badge variant="default"><Calendar size={10} style={{ marginRight: 2 }} />{frequencyMap[frequency] ?? frequency}</Badge>}
-            {hasBlocker && <Badge variant="danger"><AlertOctagon size={10} style={{ marginRight: 2 }} />Impedimento</Badge>}
+            {aggregationType && aggregationType !== 'SUM_UP' && <Badge variant="info">{AGG_LABELS[aggregationType] ?? aggregationType}</Badge>}
+            {hasBlocker && <Badge variant="danger"><AlertOctagon size={10} style={{ marginRight: 2 }} />Constrangimento</Badge>}
             {hasPhoto && <Badge variant="muted"><Camera size={10} style={{ marginRight: 2 }} />Foto</Badge>}
           </div>
         </div>
@@ -113,6 +122,16 @@ export default function IndicadorCard({ title, scopeLabel, frequency, plannedVal
               style={{ ...iconButtonStyle, color: 'var(--color-primary)', background: 'transparent', border: '1px solid var(--color-primary)33' }}
             >
               <Eye size={14} />
+            </button>
+          )}
+          {onFeedback && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onFeedback() }}
+              title="Pedir Feedback"
+              aria-label="Pedir Feedback"
+              style={{ ...iconButtonStyle, color: 'var(--color-primary)', background: 'transparent', border: '1px solid var(--color-primary)33' }}
+            >
+              <MessageSquare size={14} />
             </button>
           )}
           {onEdit && (
