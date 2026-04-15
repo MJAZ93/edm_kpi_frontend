@@ -73,4 +73,7 @@ export const dashboardService = {
 
   getDirecaoMilestones: (direcaoId: number) =>
     api.get<any>('/private/dashboard/direcao-milestones', { params: { direcao_id: direcaoId } }).then(r => r.data),
+
+  getDepartamentoDetail: (id: number) =>
+    api.get<any>(`/private/dashboard/departamento-detail/${id}`).then(r => r.data),
 }

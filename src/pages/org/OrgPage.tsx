@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { Plus, ChevronRight, ChevronDown, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { orgService } from '../../services/org.service'
@@ -17,6 +18,7 @@ import UserCombobox from '../../components/ui/UserCombobox'
 
 export default function OrgPage() {
   const { can } = useAuth()
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [modal, setModal] = useState<'pelouro' | 'direcao' | 'departamento' | null>(null)
@@ -77,7 +79,7 @@ export default function OrgPage() {
                     {expanded[`d-${d.id}`] && (
                       <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {d.departamentos?.map(dep => (
-                          <div key={dep.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', borderRadius: 8, border: '1px solid var(--color-border)' }}>
+                          <div key={dep.id} onClick={() => navigate(`/org/departamentos/${dep.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--color-bg)', borderRadius: 8, border: '1px solid var(--color-border)', cursor: 'pointer', transition: 'background 150ms' }} onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-muted)' }} onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg)' }}>
                             <p style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--color-text)' }}>{dep.name}</p>
                             <Badge variant="muted">Departamento</Badge>
                             <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-muted)' }}>

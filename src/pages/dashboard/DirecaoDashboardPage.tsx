@@ -615,7 +615,7 @@ export default function DirecaoDashboardPage() {
               return (
                 <div
                   key={dept.id}
-                  onClick={() => navigate(`/projects?dept=${dept.id}`)}
+                  onClick={() => navigate(`/org/departamentos/${dept.id}`)}
                   style={{
                     padding: '16px 18px',
                     borderRadius: 14,
@@ -694,7 +694,7 @@ export default function DirecaoDashboardPage() {
             {stalled.map((task: any) => (
               <div
                 key={`stalled-${task.id}`}
-                onClick={() => navigate('/projects')}
+                onClick={() => navigate(`/tasks/${task.id}`)}
                 style={{
                   padding: '14px 16px',
                   borderRadius: 12,
@@ -719,7 +719,12 @@ export default function DirecaoDashboardPage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
                   {task.dept_name && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text)', background: 'rgba(220,38,38,0.10)', borderRadius: 5, padding: '1px 7px', display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span
+                      onClick={e => { e.stopPropagation(); navigate(`/org/departamentos/${task.dept_id}`) }}
+                      style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text)', background: 'rgba(220,38,38,0.10)', borderRadius: 5, padding: '1px 7px', display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'transparent', transition: 'text-decoration-color 150ms' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecorationColor = 'var(--color-text)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecorationColor = 'transparent' }}
+                    >
                       <Building2 size={9} /> {task.dept_name}
                     </span>
                   )}
@@ -829,12 +834,17 @@ export default function DirecaoDashboardPage() {
               return (
                 <div
                   key={ms.id}
+                  onClick={() => navigate(`/tasks/${ms.task_id}`)}
                   style={{
                     padding: '14px 16px',
                     borderRadius: 12,
                     background: 'var(--color-traffic-red-bg)',
                     border: '1.5px solid rgba(220,38,38,0.18)',
+                    cursor: 'pointer',
+                    transition: 'border-color 150ms',
                   }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-traffic-red)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(220,38,38,0.18)' }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
                     <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', flex: 1, lineHeight: 1.35 }}>
@@ -855,7 +865,12 @@ export default function DirecaoDashboardPage() {
                       </span>
                     )}
                     {ms.dept_name && (
-                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', background: 'rgba(220,38,38,0.08)', borderRadius: 5, padding: '1px 7px', display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <span
+                        onClick={e => { e.stopPropagation(); navigate(`/org/departamentos/${ms.dept_id}`) }}
+                        style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-muted)', background: 'rgba(220,38,38,0.08)', borderRadius: 5, padding: '1px 7px', display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'transparent', transition: 'text-decoration-color 150ms' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.textDecorationColor = 'var(--color-text-muted)' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.textDecorationColor = 'transparent' }}
+                      >
                         <Building2 size={9} /> {ms.dept_name}
                       </span>
                     )}
