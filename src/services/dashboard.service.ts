@@ -76,4 +76,7 @@ export const dashboardService = {
 
   getDepartamentoDetail: (id: number) =>
     api.get<any>(`/private/dashboard/departamento-detail/${id}`).then(r => r.data),
+
+  getUserDetail: (id: number) =>
+    api.get<any>(`/private/dashboard/user-detail/${id}`).then(r => r.data),
 }

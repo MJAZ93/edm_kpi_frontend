@@ -42,6 +42,27 @@ export const projectsService = {
 
   deleteHistory: (entryId: number) =>
     api.delete(`/private/projects/history/${entryId}`).then(r => r.data),
+
+  listExecutionHistory: (projectId: number) =>
+    api.get<ExecutionHistoryResponse>(`/private/projects/${projectId}/execution-history`).then(r => r.data),
+}
+
+export interface ExecutionPeriod {
+  period: string
+  planned: number
+  achieved: number
+  exec_pct: number
+  cum_planned: number
+  cum_achieved: number
+  cum_exec_pct: number
+  ms_count: number
+  ms_done: number
+}
+
+export interface ExecutionHistoryResponse {
+  periods: ExecutionPeriod[]
+  start_date?: string
+  end_date?: string
 }
 
 export interface ProjectHistoryEntry {

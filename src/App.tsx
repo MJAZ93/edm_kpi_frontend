@@ -29,6 +29,7 @@ const BlockersPage       = React.lazy(() => import('./pages/blockers/BlockersPag
 const OrgPage            = React.lazy(() => import('./pages/org/OrgPage'))
 const OrgEntityPage      = React.lazy(() => import('./pages/org/OrgEntityPage'))
 const DepartamentoDetailPage = React.lazy(() => import('./pages/org/DepartamentoDetailPage'))
+const UserDetailPage = React.lazy(() => import('./pages/users/UserDetailPage'))
 const RegioesPage        = React.lazy(() => import('./pages/geo/RegioesPage'))
 const AscsPage           = React.lazy(() => import('./pages/geo/AscsPage'))
 const UsersPage          = React.lazy(() => import('./pages/users/UsersPage'))
@@ -107,6 +108,7 @@ export default function App() {
 
               <Route path="/org" element={<OrgPage />} />
               <Route path="/org/departamentos/:id" element={<DepartamentoDetailPage />} />
+              <Route path="/users/:id" element={<UserDetailPage />} />
 
               {/* Org admin — gated by role */}
               <Route element={<PermissionRoute action="view:pelouros" />}>

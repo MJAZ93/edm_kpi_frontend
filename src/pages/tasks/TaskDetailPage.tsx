@@ -335,10 +335,12 @@ export default function TaskDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
 
-  /** DEPARTAMENTO users can only edit milestones assigned to them */
+  /** Only the assigned user (milestone or task level) can edit milestone data */
   const canEditMilestone = (m: { assigned_to?: number }) => {
-    if (user?.role === 'DEPARTAMENTO') return m.assigned_to === user?.id
-    return can('update:milestone')
+    if (user?.role === 'CA') return true
+    const isAssignedMs = m.assigned_to === user?.id
+    const isAssignedTask = (task as any)?.assigned_to === user?.id
+    return isAssignedMs || isAssignedTask
   }
 
   const [editModal, setEditModal] = useState(false)

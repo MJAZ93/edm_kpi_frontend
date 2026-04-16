@@ -7,7 +7,7 @@ import {
   ListChecks, CheckCircle2, Circle, MessageSquare, ArrowRight,
   BarChart3, AlertTriangle, User,
 } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, ReferenceLine } from 'recharts'
 import HoverReferenceLine from '../../components/charts/HoverReferenceLine'
 import { dashboardService } from '../../services/dashboard.service'
 import { projectsService } from '../../services/projects.service'
@@ -126,6 +126,7 @@ export default function DirecaoDashboardPage() {
 
   // Pilares chart state
   const [selectedPilar, setSelectedPilar] = useState<any | null>(null)
+  const [chartTab, setChartTab] = useState<'objectivos' | 'execucao'>('objectivos')
 
   // Data
   const { data: overview, isLoading } = useQuery({
@@ -169,6 +170,13 @@ export default function DirecaoDashboardPage() {
     queryKey: ['projects', 'history', selectedPilar?.id],
     queryFn: () => projectsService.listHistory(selectedPilar!.id),
     enabled: !!selectedPilar?.id,
+  })
+
+  // Execution history for chart
+  const { data: execHistoryData } = useQuery({
+    queryKey: ['projects', 'execution-history', selectedPilar?.id],
+    queryFn: () => projectsService.listExecutionHistory(selectedPilar!.id),
+    enabled: !!selectedPilar?.id && chartTab === 'execucao',
   })
 
   // ── Derived ──────────────────────────────────────────────────────────────────
@@ -328,7 +336,7 @@ export default function DirecaoDashboardPage() {
             </div>
           </Card>
 
-          {/* Chart — project value history */}
+          {/* Chart — project value history / execution */}
           <Card variant="elevated" style={{ height: '100%', overflow: 'auto' }}>
             {selectedPilar ? (
               <>
@@ -337,13 +345,35 @@ export default function DirecaoDashboardPage() {
                     <p style={{ fontSize: 18, fontWeight: 900, color: 'var(--color-text)', letterSpacing: '-0.01em' }}>
                       {selectedPilar.goal_label || selectedPilar.title}
                     </p>
-                    <button
-                      onClick={() => navigate(`/projects/${selectedPilar.id}`)}
-                      style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
-                    >
-                      Ver pilar <ChevronRight size={12} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {/* Tab switcher */}
+                      <div style={{ display: 'flex', gap: 0, background: 'var(--color-bg-strong)', borderRadius: 10, padding: 3 }}>
+                        {(['objectivos', 'execucao'] as const).map(tab => (
+                          <button
+                            key={tab}
+                            onClick={() => setChartTab(tab)}
+                            style={{
+                              padding: '5px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                              fontSize: 11, fontWeight: 700,
+                              background: chartTab === tab ? 'var(--color-surface)' : 'transparent',
+                              color: chartTab === tab ? 'var(--color-text)' : 'var(--color-text-muted)',
+                              boxShadow: chartTab === tab ? 'var(--shadow-soft)' : 'none',
+                              transition: 'all 150ms',
+                            }}
+                          >
+                            {tab === 'objectivos' ? 'Objectivos' : 'Execução'}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => navigate(`/projects/${selectedPilar.id}`)}
+                        style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                      >
+                        Ver pilar <ChevronRight size={12} />
+                      </button>
+                    </div>
                   </div>
+
                   {selectedPilar.goal_label && (
                     <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 4 }}>
                       {selectedPilar.title}
@@ -373,7 +403,39 @@ export default function DirecaoDashboardPage() {
                   </div>
                 </div>
 
-                {(() => {
+                {chartTab === 'execucao' ? (() => {
+                  const periods = execHistoryData?.periods ?? []
+                  if (periods.length === 0) return (
+                    <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-strong)', borderRadius: 12, color: 'var(--color-text-muted)' }}>
+                      <p style={{ fontSize: 13, fontWeight: 600 }}>Este pilar ainda não tem indicadores com datas.</p>
+                    </div>
+                  )
+
+                  const chartData = periods.map((p: any) => ({
+                    period: new Date(p.period + '-01').toLocaleDateString('pt-MZ', { month: 'short', year: '2-digit' }),
+                    exec_pct: p.exec_pct,
+                    cum_exec_pct: p.cum_exec_pct,
+                    planned: p.planned,
+                    achieved: p.achieved,
+                  }))
+
+                  return (
+                    <ResponsiveContainer width="100%" height={370}>
+                      <LineChart data={chartData} margin={{ top: 28, right: 60, left: 0, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,80,20,0.06)" vertical={false} />
+                        <XAxis dataKey="period" tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--color-text)' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#aaa' }} axisLine={false} tickLine={false} domain={[0, (max: number) => Math.max(100, Math.ceil(max * 1.1))]} tickFormatter={(v: number) => `${v}%`} />
+                        <Tooltip
+                          contentStyle={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: 'var(--shadow-soft)', fontSize: 13 }}
+                          formatter={(value: any, name: string) => [`${Number(value).toFixed(1)}%`, name === 'exec_pct' ? 'Período' : 'Acumulado']}
+                        />
+                        <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="8 4" strokeWidth={1.5} label={{ value: 'Meta: 100%', fill: '#16a34a', fontSize: 11, fontWeight: 700 }} />
+                        <Line type="monotone" dataKey="exec_pct" name="Período" stroke="#e8670a" strokeWidth={2.5} dot={{ r: 5, fill: '#e8670a', strokeWidth: 0 }} />
+                        <Line type="monotone" dataKey="cum_exec_pct" name="Acumulado" stroke="#4a6fa5" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 4, fill: '#4a6fa5', strokeWidth: 0 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )
+                })() : (() => {
                   const sorted = [...pilarHistory]
                     .sort((a: any, b: any) => (a.period_reference ?? a.created_at).localeCompare(b.period_reference ?? b.created_at))
 
@@ -582,7 +644,7 @@ export default function DirecaoDashboardPage() {
                 height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: 'var(--color-text-muted)',
               }}>
-                <p style={{ fontSize: 13, fontWeight: 600 }}>Seleccione um pilar para ver a evolução do valor.</p>
+                <p style={{ fontSize: 13, fontWeight: 600 }}>Seleccione um pilar para ver a evolução.</p>
               </div>
             )}
           </Card>
@@ -998,7 +1060,7 @@ export default function DirecaoDashboardPage() {
           </div>
 
           {(() => {
-            const activities: { id: string; type: string; title: string; subtitle: string; color: string; icon: 'stalled' | 'blocker' | 'task' | 'dept'; time?: string }[] = []
+            const activities: { id: string; type: string; title: string; subtitle: string; color: string; icon: 'stalled' | 'blocker' | 'task' | 'dept'; time?: string; link?: string }[] = []
 
             stalled.forEach((t: any) => {
               activities.push({
@@ -1008,6 +1070,7 @@ export default function DirecaoDashboardPage() {
                 subtitle: [t.dept_name, t.project_title, `${t.days_elapsed}d sem progresso`].filter(Boolean).join(' · '),
                 color: 'var(--color-traffic-red)',
                 icon: 'stalled',
+                link: `/tasks/${t.id}`,
               })
             })
 
@@ -1020,10 +1083,11 @@ export default function DirecaoDashboardPage() {
                 color: BLOCKER_COLORS[bl.blocker_type] ?? '#4a6fa5',
                 icon: 'blocker',
                 time: bl.created_at,
+                link: `/blockers`,
               })
             })
 
-            overdueMilestones.slice(0, 3).forEach((ms: any) => {
+            overdueMilestones.forEach((ms: any) => {
               activities.push({
                 id: `overdue-${ms.id}`,
                 type: 'Indicador atrasado',
@@ -1031,6 +1095,7 @@ export default function DirecaoDashboardPage() {
                 subtitle: [ms.assignee_name, ms.dept_name, `${ms.days_overdue}d atrasado`].filter(Boolean).join(' · '),
                 color: 'var(--color-traffic-red)',
                 icon: 'task',
+                link: `/tasks/${ms.task_id}`,
               })
             })
 
@@ -1044,27 +1109,33 @@ export default function DirecaoDashboardPage() {
             }
 
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {activities.slice(0, 8).map((act, i, arr) => (
+              <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {activities.map((act, i, arr) => (
                   <div
                     key={act.id}
+                    onClick={() => act.link && navigate(act.link)}
                     style={{
-                      display: 'flex', gap: 12, padding: '12px 0',
+                      display: 'flex', gap: 12, padding: '10px 4px',
                       borderBottom: i < arr.length - 1 ? '1px solid var(--color-border)' : 'none',
+                      cursor: act.link ? 'pointer' : 'default',
+                      borderRadius: 8,
+                      transition: 'background 120ms',
                     }}
+                    onMouseEnter={e => { if (act.link) (e.currentTarget as HTMLDivElement).style.background = 'var(--color-bg-strong)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                   >
                     <div style={{
-                      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
                       background: `${act.color}15`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      {act.icon === 'stalled' && <AlertOctagon size={14} style={{ color: act.color }} />}
-                      {act.icon === 'blocker' && <ShieldAlert size={14} style={{ color: act.color }} />}
-                      {act.icon === 'task' && <ListChecks size={14} style={{ color: act.color }} />}
-                      {act.icon === 'dept' && <Building2 size={14} style={{ color: act.color }} />}
+                      {act.icon === 'stalled' && <AlertOctagon size={13} style={{ color: act.color }} />}
+                      {act.icon === 'blocker' && <ShieldAlert size={13} style={{ color: act.color }} />}
+                      {act.icon === 'task' && <ListChecks size={13} style={{ color: act.color }} />}
+                      {act.icon === 'dept' && <Building2 size={13} style={{ color: act.color }} />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, color: act.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                           {act.type}
                         </span>
@@ -1074,13 +1145,14 @@ export default function DirecaoDashboardPage() {
                           </span>
                         )}
                       </div>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)', marginBottom: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {act.title}
                       </p>
                       <p style={{ fontSize: 11, color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {act.subtitle}
                       </p>
                     </div>
+                    {act.link && <ChevronRight size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0, alignSelf: 'center' }} />}
                   </div>
                 ))}
               </div>
@@ -1212,11 +1284,11 @@ export default function DirecaoDashboardPage() {
                 return (
                   <div
                     key={emp.id}
-                    onClick={() => setSelectedEmp(isSelected ? null : emp)}
+                    onClick={() => navigate(`/users/${emp.id}`)}
                     style={{
                       padding: '11px 14px', borderRadius: 12, cursor: 'pointer',
-                      background: isSelected ? ec.bg : isTop ? `${ec.text}0d` : 'var(--color-bg-strong)',
-                      border: `2px solid ${isSelected ? ec.text : isTop ? `${ec.text}33` : 'transparent'}`,
+                      background: isTop ? `${ec.text}0d` : 'var(--color-bg-strong)',
+                      border: `2px solid ${isTop ? `${ec.text}33` : 'transparent'}`,
                       transition: 'all 150ms',
                     }}
                     onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.borderColor = `${ec.text}55` }}

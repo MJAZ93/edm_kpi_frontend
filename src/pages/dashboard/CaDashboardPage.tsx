@@ -10,7 +10,7 @@ import { projectsService } from '../../services/projects.service'
 import { feedbackService } from '../../services/feedback.service'
 import type { Feedback } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts'
 import HoverReferenceLine from '../../components/charts/HoverReferenceLine'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -62,6 +62,7 @@ export default function CaDashboardPage() {
   const navigate = useNavigate()
   const [selected, setSelected] = useState<DrillDownItem | null>(null)
   const [selectedPilar, setSelectedPilar] = useState<any | null>(null)
+  const [chartTab, setChartTab] = useState<'objectivos' | 'execucao'>('objectivos')
 
   // ── Data fetching ───────────────────────────────────────────────────────────
   const { data: summary, isLoading } = useQuery({
@@ -89,6 +90,12 @@ export default function CaDashboardPage() {
     queryKey: ['projects', 'history', selectedPilar?.id],
     queryFn: () => projectsService.listHistory(selectedPilar!.id),
     enabled: !!selectedPilar?.id,
+  })
+
+  const { data: execHistoryData } = useQuery({
+    queryKey: ['projects', 'execution-history', selectedPilar?.id],
+    queryFn: () => projectsService.listExecutionHistory(selectedPilar!.id),
+    enabled: !!selectedPilar?.id && chartTab === 'execucao',
   })
 
   const { data: topDirecoes } = useQuery({
@@ -353,13 +360,35 @@ export default function CaDashboardPage() {
                     <p style={{ fontSize: 18, fontWeight: 900, color: 'var(--color-text)', letterSpacing: '-0.01em' }}>
                       {selectedPilar.goal_label || selectedPilar.title}
                     </p>
-                    <button
-                      onClick={() => navigate(`/projects/${selectedPilar.id}`)}
-                      style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
-                    >
-                      Ver pilar <ChevronRight size={12} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {/* Tab switcher */}
+                      <div style={{ display: 'flex', gap: 0, background: 'var(--color-bg-strong)', borderRadius: 10, padding: 3 }}>
+                        {(['objectivos', 'execucao'] as const).map(tab => (
+                          <button
+                            key={tab}
+                            onClick={() => setChartTab(tab)}
+                            style={{
+                              padding: '5px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                              fontSize: 11, fontWeight: 700,
+                              background: chartTab === tab ? 'var(--color-surface)' : 'transparent',
+                              color: chartTab === tab ? 'var(--color-text)' : 'var(--color-text-muted)',
+                              boxShadow: chartTab === tab ? 'var(--shadow-soft)' : 'none',
+                              transition: 'all 150ms',
+                            }}
+                          >
+                            {tab === 'objectivos' ? 'Objectivos' : 'Execução'}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => navigate(`/projects/${selectedPilar.id}`)}
+                        style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}
+                      >
+                        Ver pilar <ChevronRight size={12} />
+                      </button>
+                    </div>
                   </div>
+
                   {selectedPilar.goal_label && (
                     <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: 4 }}>
                       {selectedPilar.title}
@@ -389,7 +418,39 @@ export default function CaDashboardPage() {
                   </div>
                 </div>
 
-                {(() => {
+                {chartTab === 'execucao' ? (() => {
+                  const periods = execHistoryData?.periods ?? []
+                  if (periods.length === 0) return (
+                    <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg-strong)', borderRadius: 12, color: 'var(--color-text-muted)' }}>
+                      <p style={{ fontSize: 13, fontWeight: 600 }}>Este pilar ainda não tem indicadores com datas.</p>
+                    </div>
+                  )
+
+                  const chartData = periods.map((p: any) => ({
+                    period: new Date(p.period + '-01').toLocaleDateString('pt-MZ', { month: 'short', year: '2-digit' }),
+                    exec_pct: p.exec_pct,
+                    cum_exec_pct: p.cum_exec_pct,
+                    planned: p.planned,
+                    achieved: p.achieved,
+                  }))
+
+                  return (
+                    <ResponsiveContainer width="100%" height={370}>
+                      <LineChart data={chartData} margin={{ top: 28, right: 60, left: 0, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,80,20,0.06)" vertical={false} />
+                        <XAxis dataKey="period" tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--color-text)' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#aaa' }} axisLine={false} tickLine={false} domain={[0, (max: number) => Math.max(100, Math.ceil(max * 1.1))]} tickFormatter={(v: number) => `${v}%`} />
+                        <Tooltip
+                          contentStyle={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: 'var(--shadow-soft)', fontSize: 13 }}
+                          formatter={(value: any, name: string) => [`${Number(value).toFixed(1)}%`, name === 'exec_pct' ? 'Período' : 'Acumulado']}
+                        />
+                        <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="8 4" strokeWidth={1.5} label={{ value: 'Meta: 100%', fill: '#16a34a', fontSize: 11, fontWeight: 700 }} />
+                        <Line type="monotone" dataKey="exec_pct" name="Período" stroke="#e8670a" strokeWidth={2.5} dot={{ r: 5, fill: '#e8670a', strokeWidth: 0 }} />
+                        <Line type="monotone" dataKey="cum_exec_pct" name="Acumulado" stroke="#4a6fa5" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 4, fill: '#4a6fa5', strokeWidth: 0 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )
+                })() : (() => {
                   const sorted = [...pilarHistory]
                     .sort((a: any, b: any) => (a.period_reference ?? a.created_at).localeCompare(b.period_reference ?? b.created_at))
 

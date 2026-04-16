@@ -134,12 +134,19 @@ export default function DepartamentoDetailPage() {
               const wTl = (w.traffic_light ?? 'RED') as TL
               const wc = TL_COLORS[wTl] ?? TL_COLORS.RED
               return (
-                <div key={w.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '12px 14px', borderRadius: 12,
-                  background: i < 3 ? 'var(--color-surface-muted)' : 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                }}>
+                <div
+                  key={w.id}
+                  onClick={() => navigate(`/users/${w.id}`)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                    background: i < 3 ? 'var(--color-surface-muted)' : 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    transition: 'border-color 120ms',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = wc.text)}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-border)')}
+                >
                   <span style={{ fontSize: 18, width: 28, textAlign: 'center' }}>{i < 3 ? MEDALS[i] : `${i + 1}º`}</span>
                   <Avatar name={w.name} size="sm" />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -152,6 +159,7 @@ export default function DepartamentoDetailPage() {
                     <span style={{ fontSize: 18, fontWeight: 900, color: wc.text }}>{w.total_score}</span>
                     <TrafficLight value={wTl} size="sm" />
                   </div>
+                  <ChevronRight size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
                 </div>
               )
             })}
