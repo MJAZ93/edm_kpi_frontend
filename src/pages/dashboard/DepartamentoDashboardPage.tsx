@@ -180,7 +180,8 @@ export default function DepartamentoDashboardPage() {
     queryKey: ['dashboard', 'employee-ranking'],
     queryFn: dashboardService.getEmployeeRanking,
   })
-  const employees: any[] = empData?.ranking ?? []
+  // Only show technicians (COLABORADOR) — exclude dept heads and directors
+  const employees: any[] = (empData?.ranking ?? []).filter((e: any) => e.category === 'COLABORADOR')
 
   const { data: feedbackData } = useQuery({
     queryKey: ['feedback', 'received', { page: 0, limit: 5 }],
@@ -214,6 +215,8 @@ export default function DepartamentoDashboardPage() {
     },
   })
   const deptUsers: any[] = overview?.users ?? []
+  // Exclude the dept head (current user) from the member cards — they manage, not rank
+  const memberPerf: any[] = (overview?.member_performance ?? []).filter((m: any) => m.user_id !== user?.id)
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const dept        = overview?.department
@@ -356,6 +359,111 @@ export default function DepartamentoDashboardPage() {
         />
       </div>
 
+      {/* ── Equipa do Departamento ───────────────────────────────────────────── */}
+      {memberPerf.length > 0 && (
+        <Card variant="elevated">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+            <User size={15} style={{ color: 'var(--color-primary)' }} />
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Equipa do Departamento
+            </p>
+            <Badge variant="default" style={{ marginLeft: 4 }}>{memberPerf.length}</Badge>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+            {memberPerf.map((member: any) => {
+              const mtl = (member.traffic_light ?? 'RED') as TL
+              const mc = TL_COLORS[mtl in TL_COLORS ? mtl : 'RED']
+              const msPct = member.ms_total > 0 ? Math.min(100, (member.ms_done / member.ms_total) * 100) : 0
+              const memberOverdue = overdueMilestones.filter((ms: any) => ms.assignee_id === member.user_id)
+
+              return (
+                <div
+                  key={member.user_id}
+                  style={{
+                    padding: '16px',
+                    borderRadius: 12,
+                    background: 'var(--color-bg-strong)',
+                    border: `1.5px solid ${mc.border}33`,
+                  }}
+                >
+                  {/* Header: avatar + name | execution hero */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: '50%',
+                      background: mc.border, color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16, fontWeight: 800, flexShrink: 0,
+                    }}>
+                      {(member.name ?? '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {member.name}
+                      </p>
+                      {/* Objectivos — secondary, inline */}
+                      <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                        Obj. <span style={{ color: 'var(--color-text)', fontWeight: 700 }}>{(member.goal_score ?? 0).toFixed(1)}%</span>
+                        {member.ms_overdue > 0 && (
+                          <span style={{ marginLeft: 8, color: 'var(--color-traffic-red)', fontWeight: 700 }}>
+                            · {member.ms_overdue} atraso{member.ms_overdue !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    {/* Execution — hero number */}
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <p style={{ fontSize: 26, fontWeight: 900, color: mc.text, lineHeight: 1 }}>
+                        {(member.execution_score ?? 0).toFixed(1)}
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)' }}>%</span>
+                      </p>
+                      <p style={{ fontSize: 9, color: 'var(--color-text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Execução</p>
+                    </div>
+                  </div>
+
+                  {/* Marcos concluídos bar */}
+                  <div style={{ marginBottom: memberOverdue.length > 0 ? 10 : 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                        Marcos concluídos
+                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-soft)' }}>
+                        {member.ms_done ?? 0}/{member.ms_total ?? 0}
+                        <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}> ({msPct.toFixed(0)}%)</span>
+                      </span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 999, background: 'var(--color-border)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${msPct}%`, borderRadius: 999, background: mc.border, transition: 'width 500ms' }} />
+                    </div>
+                  </div>
+
+                  {/* Overdue milestones list */}
+                  {memberOverdue.length > 0 && (
+                    <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {memberOverdue.slice(0, 3).map((ms: any) => (
+                        <div key={ms.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <p style={{ fontSize: 11, color: 'var(--color-text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                            {ms.title}
+                          </p>
+                          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-traffic-red)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {ms.overdue_days}d
+                          </span>
+                        </div>
+                      ))}
+                      {memberOverdue.length > 3 && (
+                        <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                          +{memberOverdue.length - 3} mais atrasos
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
         <Card variant="elevated">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -430,6 +538,7 @@ export default function DepartamentoDashboardPage() {
               Nenhum marco está fora da periodicidade no momento.
             </div>
           ) : (
+            <div style={{ maxHeight: 580, overflowY: 'auto', paddingRight: 4 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
               {overdueMilestones.map((ms: any) => (
                 <div
@@ -467,6 +576,7 @@ export default function DepartamentoDashboardPage() {
                   </div>
                 </div>
               ))}
+            </div>
             </div>
           )}
         </Card>
@@ -527,6 +637,7 @@ export default function DepartamentoDashboardPage() {
                 <p style={{ fontSize: 13, color: 'var(--color-text-muted)', fontWeight: 600 }}>Nenhuma acção encontrada</p>
               </div>
             ) : (
+              <div style={{ maxHeight: 560, overflowY: 'auto', paddingRight: 4 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {filteredTasks.map((task: any) => {
                   const isSelected = selectedTask?.id === task.id
@@ -659,6 +770,7 @@ export default function DepartamentoDashboardPage() {
                     </div>
                   )
                 })}
+              </div>
               </div>
             )}
           </Card>
