@@ -335,8 +335,10 @@ export default function TaskDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
 
-  /** Only the assigned user (milestone or task level) can edit milestone data */
+  /** Only the assigned user (milestone or task level) can edit milestone data.
+   *  Technicians (non-head DEPARTAMENTO) cannot open the full edit modal. */
   const canEditMilestone = (m: { assigned_to?: number }) => {
+    if (isTechnician) return false
     if (user?.role === 'CA') return true
     const isAssignedMs = m.assigned_to === user?.id
     const isAssignedTask = (task as any)?.assigned_to === user?.id
@@ -398,6 +400,15 @@ export default function TaskDetailPage() {
     queryFn: () => dashboardService.getForecast(taskId),
     enabled: !!taskId,
   })
+
+  const { data: memberOverview } = useQuery({
+    queryKey: ['dashboard', 'member-overview'],
+    queryFn: dashboardService.getMemberOverview,
+    enabled: user?.role === 'DEPARTAMENTO',
+    staleTime: 60_000,
+  })
+  // Technician = DEPARTAMENTO role but not a dept head
+  const isTechnician = user?.role === 'DEPARTAMENTO' && memberOverview?.is_dept_head === false
 
   // Geo data — light (names only) for scope picker; full (with polygons) for map
   // Geo data — read-only from cache (populated by AppShell)
@@ -667,7 +678,7 @@ export default function TaskDetailPage() {
             <Button variant="secondary" icon={<MessageSquare size={14} />} onClick={() => setFeedbackModal(true)}>
               Feedback
             </Button>
-            {can('create:task') && (
+            {can('create:task') && !isTechnician && (
               <Button variant="secondary" icon={<Pencil size={14} />} onClick={() => setEditModal(true)}>
                 Editar
               </Button>
@@ -702,7 +713,7 @@ export default function TaskDetailPage() {
           </div>
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Actual</p>
-            {aggType === 'MANUAL' && showManualInput ? (
+            {aggType === 'MANUAL' && !isTechnician && showManualInput ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input
                   type="number" step="any" autoFocus
@@ -716,11 +727,11 @@ export default function TaskDetailPage() {
               </div>
             ) : (
               <p
-                style={{ fontSize: 28, fontWeight: 800, color: 'var(--color-primary)', cursor: aggType === 'MANUAL' ? 'pointer' : 'default' }}
-                onClick={() => { if (aggType === 'MANUAL') { setManualValue(String(currentVal)); setShowManualInput(true) } }}
-                title={aggType === 'MANUAL' ? 'Clique para editar' : undefined}
+                style={{ fontSize: 28, fontWeight: 800, color: 'var(--color-primary)', cursor: aggType === 'MANUAL' && !isTechnician ? 'pointer' : 'default' }}
+                onClick={() => { if (aggType === 'MANUAL' && !isTechnician) { setManualValue(String(currentVal)); setShowManualInput(true) } }}
+                title={aggType === 'MANUAL' && !isTechnician ? 'Clique para editar' : undefined}
               >
-                {(currentVal ?? 0).toLocaleString('pt-PT')}{aggType === 'MANUAL' && <Pencil size={12} style={{ marginLeft: 6, opacity: 0.5, verticalAlign: 'super' }} />}
+                {(currentVal ?? 0).toLocaleString('pt-PT')}{aggType === 'MANUAL' && !isTechnician && <Pencil size={12} style={{ marginLeft: 6, opacity: 0.5, verticalAlign: 'super' }} />}
               </p>
             )}
           </div>
@@ -798,7 +809,7 @@ export default function TaskDetailPage() {
               </p>
               <Badge variant="default">{indicadores.length}</Badge>
             </div>
-            {can('update:milestone') && (
+            {can('update:milestone') && !isTechnician && (
               <Button variant="primary" size="sm" icon={<Plus size={12} />} onClick={openCreateMilestone}>
                 Novo
               </Button>

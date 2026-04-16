@@ -21,6 +21,7 @@ import ProgressBar from '../../components/ui/ProgressBar'
 import CaDashboardPage from './CaDashboardPage'
 import DirecaoDashboardPage from './DirecaoDashboardPage'
 import DepartamentoDashboardPage from './DepartamentoDashboardPage'
+import MemberDashboardPage from './MemberDashboardPage'
 import type { Role } from '../../types'
 
 function fmtDate(d?: string) {
@@ -92,6 +93,21 @@ const FILTER_TABS: { label: string; value: CreatorTypeFilter }[] = [
   { label: 'Departamento', value: 'DEPARTAMENTO' },
 ]
 
+// Detect if DEPARTAMENTO user is a dept head or a regular member.
+// Uses member-overview which returns is_dept_head.
+function DepartamentoRouter() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard', 'member-overview'],
+    queryFn: dashboardService.getMemberOverview,
+    staleTime: 60_000,
+  })
+  if (isLoading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>
+  }
+  if (data?.is_dept_head) return <DepartamentoDashboardPage />
+  return <MemberDashboardPage />
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -106,9 +122,9 @@ export default function DashboardPage() {
     return <DirecaoDashboardPage />
   }
 
-  // Department head gets their task-focused dashboard
+  // Department role: detect head vs regular member
   if (user?.role === 'DEPARTAMENTO') {
-    return <DepartamentoDashboardPage />
+    return <DepartamentoRouter />
   }
   const [creatorFilter, setCreatorFilter] = useState<CreatorTypeFilter>('Todos')
   const [search, setSearch] = useState('')
