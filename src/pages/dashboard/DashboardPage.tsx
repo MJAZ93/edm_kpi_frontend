@@ -95,11 +95,13 @@ const FILTER_TABS: { label: string; value: CreatorTypeFilter }[] = [
 
 // Detect if DEPARTAMENTO user is a dept head or a regular member.
 // Uses member-overview which returns is_dept_head.
+// userId is included in the key so different users never share this cache entry.
 function DepartamentoRouter() {
+  const { user } = useAuth()
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard', 'member-overview'],
+    queryKey: ['dashboard', 'member-overview', user?.id],
     queryFn: dashboardService.getMemberOverview,
-    staleTime: 60_000,
+    staleTime: 0,
   })
   if (isLoading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>

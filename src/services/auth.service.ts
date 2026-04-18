@@ -11,6 +11,9 @@ export const authService = {
   resetPassword: (token: string, password: string) =>
     api.post('/public/auth/reset-password', { token, password }).then(r => r.data),
 
+  changePassword: (current_password: string, new_password: string) =>
+    api.put('/private/auth/change-password', { current_password, new_password }).then(r => r.data),
+
   me: () =>
     api.get('/private/users/me').then(r => r.data),
 }

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Calendar, CalendarCheck, Weight, ArrowUp, MapPin, Users, Tag, User, Activity, Building2, FolderOpen, Pencil, MessageSquare, TrendingUp, ListTodo } from 'lucide-react'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts'
+import { Plus, Trash2, Calendar, CalendarCheck, Weight, ArrowUp, MapPin, Users, Tag, User, Activity, Building2, FolderOpen, Pencil, MessageSquare, TrendingUp, ListTodo, ExternalLink } from 'lucide-react'
+import InfoPopover from '../../components/ui/InfoPopover'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts'
 import HoverReferenceLine from '../../components/charts/HoverReferenceLine'
 import toast from 'react-hot-toast'
 import { projectsService } from '../../services/projects.service'
@@ -24,6 +25,7 @@ import PerformanceScore from '../../components/domain/PerformanceScore'
 import TaskCard from '../../components/domain/TaskCard'
 import PerformanceLineChart from '../../components/charts/PerformanceLineChart'
 import GanttChart from '../../components/charts/GanttChart'
+import MetaRealizadoChart from '../../components/charts/MetaRealizadoChart'
 import HistoryTab from '../../components/domain/HistoryTab'
 import ProjectHistoryTab from '../../components/domain/ProjectHistoryTab'
 import TaskForm from '../tasks/TaskForm'
@@ -32,6 +34,83 @@ import { buildPeriodOptions } from '../../components/domain/ProgressModal'
 import QuickFeedbackModal from '../../components/domain/QuickFeedbackModal'
 import EntityFeedbackTab from '../../components/domain/EntityFeedbackTab'
 import type { CreateTaskPayload, CreateProjectPayload, ScopeType } from '../../types'
+
+// ── Task chart panel — renders inline inside the right card ───────────────
+function TaskChartPanel({ taskId, onBack, onOpen }: {
+  taskId: number
+  onBack: () => void
+  onOpen: () => void
+}) {
+  const { data: task, isLoading: loadingTask } = useQuery({
+    queryKey: ['tasks', taskId],
+    queryFn: () => tasksService.get(taskId),
+    staleTime: 30_000,
+  })
+
+  // Use the backend aggregation endpoint — it already respects aggregation_type
+  // (SUM_UP sums milestones, AVG averages them, SUM_DOWN applies start−sum, LAST
+  // uses only the most recent period value). This avoids a frontend-only SUM that
+  // ignores the indicator's aggregation semantics.
+  const { data: chartRaw, isLoading: loadingChart } = useQuery({
+    queryKey: ['task-monthly-chart', taskId],
+    queryFn: () => milestonesService.taskMonthlyChart(taskId),
+    staleTime: 30_000,
+  })
+
+  const chartData = chartRaw?.rows ?? []
+  const isLoading = loadingTask || loadingChart
+
+  return (
+    <>
+      {/* Header: back button + task title + open button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <button
+          onClick={onBack}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '5px 12px', borderRadius: 8,
+            border: '1px solid var(--color-border)', background: 'none',
+            color: 'var(--color-text-muted)', cursor: 'pointer',
+            fontSize: 12, fontWeight: 700, flexShrink: 0,
+          }}
+        >
+          ← Pilar
+        </button>
+        <p style={{
+          fontSize: 12, fontWeight: 800, color: 'var(--color-text)',
+          flex: 1, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {loadingTask ? '…' : (task?.title ?? '—')}
+        </p>
+        <Button variant="primary" size="sm" icon={<ExternalLink size={12} />} onClick={onOpen}>
+          Abrir Acção
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+          <Spinner size="lg" />
+        </div>
+      ) : chartData.length === 0 ? (
+        <div style={{
+          padding: 32, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)',
+          background: 'var(--color-surface-muted)', borderRadius: 10, border: '1px dashed var(--color-border)',
+        }}>
+          Esta acção ainda não tem metas mensais definidas.<br />
+          Verifique se os indicadores têm data de início e fim.
+        </div>
+      ) : (
+        <MetaRealizadoChart
+          data={chartData}
+          height={300}
+          aggregationType={task?.aggregation_type}
+          taskTargetValue={task?.target_value ?? undefined}
+          taskStartValue={task?.start_value ?? undefined}
+        />
+      )}
+    </>
+  )
+}
 
 const STATUS_BADGE: Record<string, 'orange' | 'success' | 'muted'> = {
   ACTIVE: 'orange', COMPLETED: 'success', CANCELLED: 'muted',
@@ -98,6 +177,7 @@ export default function ProjectDetailPage() {
   const direcoesData = qcRef.getQueryData<any>(['direcoes'])
   const [activeTab, setActiveTab] = useState('overview')
   const [chartTab, setChartTab] = useState<'objectivos' | 'execucao'>('objectivos')
+  const [previewTaskId, setPreviewTaskId] = useState<number | null>(null)
   const [feedbackModal, setFeedbackModal] = useState(false)
 
   // Fetch project history to know used periods (for progress update validation)
@@ -116,6 +196,7 @@ export default function ProjectDetailPage() {
     queryKey: ['projects', 'execution-history', projectId],
     queryFn: () => projectsService.listExecutionHistory(projectId),
     enabled: !!projectId && chartTab === 'execucao',
+    staleTime: 0,
   })
   const needsPolygon = activeTab === 'scope'
   const { data: ascsGeo }       = useQuery({ queryKey: ['geo', 'ascs', 'polygon'],    queryFn: () => geoService.listAscs({ includePolygon: true }),    staleTime: Infinity, enabled: needsPolygon })
@@ -457,16 +538,13 @@ export default function ProjectDetailPage() {
               {tasks.map(t => {
                 const tl = (t.performance?.traffic_light ?? '') as string
                 const tlColor = TL_FG[tl] ?? 'var(--color-border)'
-                const exec = t.performance?.execution_score ?? 0
-                const goal = t.performance?.goal_score ?? 0
-                const score = t.performance?.total_score ?? 0
                 const taskStart = t.start_value ?? 0
                 const taskTarget = t.target_value ?? 0
                 const taskCurrent = t.current_value ?? taskStart
                 const taskRange = Math.abs(taskTarget - taskStart)
                 const taskPct = taskRange > 0 ? Math.min(100, (Math.abs(taskCurrent - taskStart) / taskRange) * 100) : 0
                 return (
-                  <div key={t.id} onClick={() => navigate(`/tasks/${t.id}`)}
+                  <div key={t.id} onClick={() => setPreviewTaskId(t.id)}
                     style={{ padding: '10px 12px', background: 'var(--color-bg-strong)', borderRadius: 10, cursor: 'pointer', border: '1.5px solid transparent', transition: 'border-color 150ms', borderLeft: `3px solid ${tlColor}` }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = tlColor }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'transparent'; (e.currentTarget as HTMLElement).style.borderLeftColor = tlColor }}
@@ -474,7 +552,7 @@ export default function ProjectDetailPage() {
                     {/* Title */}
                     <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-text)', marginBottom: 6, lineHeight: 1.3 }}>{t.title}</p>
 
-                    {/* KPI numbers row */}
+                    {/* KPI numbers */}
                     <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginBottom: 6 }}>
                       <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 600 }}>
                         Início <strong style={{ color: 'var(--color-text)', fontSize: 11 }}>{taskStart.toLocaleString('pt-PT')}</strong>
@@ -489,27 +567,9 @@ export default function ProjectDetailPage() {
                       </span>
                     </div>
 
-                    {/* Dual progress bars: Execução + Objectivo */}
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                          <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Exec</span>
-                          <span style={{ fontSize: 8, fontWeight: 800, color: exec >= 60 ? '#16a34a' : exec >= 30 ? '#d97706' : '#dc2626' }}>{Math.max(0, exec).toFixed(0)}%</span>
-                        </div>
-                        <div style={{ height: 3, borderRadius: 2, background: 'var(--color-border)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${Math.min(100, Math.max(0, exec))}%`, borderRadius: 2, background: exec >= 60 ? '#16a34a' : exec >= 30 ? '#d97706' : '#dc2626', transition: 'width 300ms' }} />
-                        </div>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                          <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Obj</span>
-                          <span style={{ fontSize: 8, fontWeight: 800, color: goal >= 60 ? '#16a34a' : goal >= 30 ? '#d97706' : '#dc2626' }}>{Math.max(0, goal).toFixed(0)}%</span>
-                        </div>
-                        <div style={{ height: 3, borderRadius: 2, background: 'var(--color-border)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${Math.min(100, Math.max(0, goal))}%`, borderRadius: 2, background: goal >= 60 ? '#16a34a' : goal >= 30 ? '#d97706' : '#dc2626', transition: 'width 300ms' }} />
-                        </div>
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 900, color: tlColor, minWidth: 32, textAlign: 'right' }}>{score.toFixed(1)}</span>
+                    {/* Single progress bar */}
+                    <div style={{ height: 4, borderRadius: 2, background: 'var(--color-border)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${taskPct}%`, borderRadius: 2, background: tlColor, transition: 'width 300ms' }} />
                     </div>
                   </div>
                 )
@@ -518,8 +578,15 @@ export default function ProjectDetailPage() {
           )}
         </Card>
 
-        {/* RIGHT: value evolution chart */}
+        {/* RIGHT: task chart OR project value evolution */}
         <Card variant="elevated">
+          {previewTaskId ? (
+            <TaskChartPanel
+              taskId={previewTaskId}
+              onBack={() => setPreviewTaskId(null)}
+              onOpen={() => navigate(`/tasks/${previewTaskId}`)}
+            />
+          ) : (<>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <TrendingUp size={14} style={{ color: 'var(--color-primary)' }} />
@@ -563,20 +630,36 @@ export default function ProjectDetailPage() {
             }))
 
             return (
-              <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={chartData} margin={{ top: 28, right: 60, left: 0, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,80,20,0.06)" vertical={false} />
-                  <XAxis dataKey="period" tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--color-text)' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#aaa' }} axisLine={false} tickLine={false} domain={[0, (max: number) => Math.max(100, Math.ceil(max * 1.1))]} tickFormatter={(v: number) => `${v}%`} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: 'var(--shadow-soft)', fontSize: 13 }}
-                    formatter={(value: any, name: string) => [`${Number(value).toFixed(1)}%`, name === 'exec_pct' ? 'Período' : 'Acumulado']}
-                  />
-                  <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="8 4" strokeWidth={1.5} label={{ value: 'Meta: 100%', fill: '#16a34a', fontSize: 11, fontWeight: 700 }} />
-                  <Line type="monotone" dataKey="exec_pct" name="Período" stroke="#e8670a" strokeWidth={2.5} dot={{ r: 5, fill: '#e8670a', strokeWidth: 0 }} />
-                  <Line type="monotone" dataKey="cum_exec_pct" name="Acumulado" stroke="#4a6fa5" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 4, fill: '#4a6fa5', strokeWidth: 0 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', top: 0, right: 0, zIndex: 10 }}>
+                  <InfoPopover title="Como ler este gráfico">
+                    <p style={{ margin: '0 0 10px', fontWeight: 700, color: 'var(--color-primary)', fontSize: 12 }}>🟠 Execução do período</p>
+                    <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>Progresso médio das acções cujos indicadores têm data nesse mês específico. Reflecte o esforço registado naquele mês.</p>
+                    <p style={{ margin: '0 0 10px', fontWeight: 700, color: '#4a6fa5', fontSize: 12 }}>🔵 Execução acumulada</p>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)' }}>Média corrida desde o início até ao mês em questão. Mostra a tendência geral de progresso ao longo do tempo.</p>
+                  </InfoPopover>
+                </div>
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={chartData} margin={{ top: 28, right: 60, left: 0, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,80,20,0.06)" vertical={false} />
+                    <XAxis dataKey="period" tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--color-text)' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#aaa' }} axisLine={false} tickLine={false} domain={[0, (max: number) => Math.max(100, Math.ceil(max * 1.1))]} tickFormatter={(v: number) => `${v}%`} />
+                    <Tooltip
+                      contentStyle={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: 'var(--shadow-soft)', fontSize: 13 }}
+                      formatter={(value: any, name: any) => [`${Number(value).toFixed(1)}%`, name === 'exec_pct' ? 'Execução do período' : 'Execução acumulada']}
+                    />
+                    <Legend
+                      iconType="circle"
+                      iconSize={8}
+                      wrapperStyle={{ fontSize: 12, fontWeight: 600, paddingTop: 4 }}
+                      formatter={(value: string) => value === 'exec_pct' ? 'Execução do período' : 'Execução acumulada'}
+                    />
+                    <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="8 4" strokeWidth={1.5} label={{ value: 'Meta: 100%', fill: '#16a34a', fontSize: 11, fontWeight: 700 }} />
+                    <Line type="monotone" dataKey="exec_pct" name="exec_pct" stroke="#e8670a" strokeWidth={2.5} dot={{ r: 5, fill: '#e8670a', strokeWidth: 0 }} />
+                    <Line type="monotone" dataKey="cum_exec_pct" name="cum_exec_pct" stroke="#4a6fa5" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 4, fill: '#4a6fa5', strokeWidth: 0 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             )
           })() : (() => {
             const pilarHistory = projectHistoryData?.entries ?? []
@@ -782,6 +865,7 @@ export default function ProjectDetailPage() {
               </>
             )
           })()}
+          </>)}
         </Card>
       </div>
 
@@ -857,41 +941,75 @@ export default function ProjectDetailPage() {
         )}
       </div>
 
-      {/* ── Employee ranking — grouped by user ── */}
+      {/* ── Collaborator ranking — scoped to this pilar's tasks ── */}
       {(() => {
-        // Group tasks by assignee user, aggregate scores
-        const userMap = new Map<number, { name: string; taskCount: number; sumScore: number; sumExec: number; sumGoal: number }>()
+        // Only include tasks with a confirmed individual assignee on THIS pilar.
+        // uid comes from t.assigned_to (never fall back to 0 — that would mix
+        // tasks whose assignee field is set but assigned_to is null).
+        type UserEntry = {
+          name: string
+          taskCount: number
+          // Inline goal achievement: (current − start) / (target − start)
+          sumGoalPct: number
+          // Inline execution from backend cache (updated to monthly-target-based
+          // after next nightly refresh; label renamed "Meta" to reflect this)
+          sumMetaPct: number
+        }
+        const userMap = new Map<number, UserEntry>()
+
         tasks.forEach(t => {
-          if (!t.assignee || !t.performance) return
-          const uid = t.assigned_to ?? 0
+          // Must have a real individual assignee and a valid assigned_to ID
+          if (!t.assignee || !t.assigned_to) return
+
+          // Goal achievement — computed directly from live task KPI values
+          const tStart   = t.start_value   ?? 0
+          const tTarget  = t.target_value  ?? 0
+          const tCurrent = t.current_value ?? tStart
+          const tRange   = Math.abs(tTarget - tStart)
+          const goalPct  = tRange > 0
+            ? Math.min(100, Math.max(0, (Math.abs(tCurrent - tStart) / tRange) * 100))
+            : 0
+
+          // Execution / "Meta" — from backend performance cache
+          // (will reflect monthly-target achievement once cache refreshes)
+          const metaPct = t.performance?.execution_score ?? 0
+
+          const uid = t.assigned_to
           const existing = userMap.get(uid)
           if (existing) {
             existing.taskCount++
-            existing.sumScore += t.performance.total_score
-            existing.sumExec += t.performance.execution_score ?? 0
-            existing.sumGoal += t.performance.goal_score ?? 0
+            existing.sumGoalPct += goalPct
+            existing.sumMetaPct += metaPct
           } else {
             userMap.set(uid, {
               name: t.assignee.name,
               taskCount: 1,
-              sumScore: t.performance.total_score,
-              sumExec: t.performance.execution_score ?? 0,
-              sumGoal: t.performance.goal_score ?? 0,
+              sumGoalPct: goalPct,
+              sumMetaPct: metaPct,
             })
           }
         })
+
         const ranked = Array.from(userMap.values())
-          .map(u => ({
-            name: u.name,
-            taskCount: u.taskCount,
-            avgScore: u.sumScore / u.taskCount,
-            avgExec: u.sumExec / u.taskCount,
-            avgGoal: u.sumGoal / u.taskCount,
-            traffic_light: util_getTL(u.sumScore / u.taskCount),
-          }))
-          .sort((a, b) => b.avgScore - a.avgScore)
+          .map(u => {
+            const avgGoal = u.sumGoalPct / u.taskCount
+            const avgMeta = u.sumMetaPct / u.taskCount
+            // Sort by combined score: weight goal (live) + meta (cached)
+            const combinedScore = avgGoal * 0.6 + avgMeta * 0.4
+            return {
+              name: u.name,
+              taskCount: u.taskCount,
+              avgGoal,
+              avgMeta,
+              combinedScore,
+              traffic_light: util_getTL(combinedScore),
+            }
+          })
+          .sort((a, b) => b.combinedScore - a.combinedScore)
+
         const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}']
         if (ranked.length === 0) return null
+
         return (
           <Card variant="elevated">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -899,20 +1017,41 @@ export default function ProjectDetailPage() {
               <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ranking de Colaboradores</p>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {ranked.map((r, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--color-bg-strong)', borderRadius: 10 }}>
-                  <span style={{ fontSize: 18, width: 28, textAlign: 'center', flexShrink: 0 }}>{medals[i] ?? `${i + 1}.`}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</p>
-                    <p style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{r.taskCount} {r.taskCount === 1 ? 'acção' : 'acções'} · Exec {r.avgExec.toFixed(0)}% · Obj {r.avgGoal.toFixed(0)}%</p>
+              {ranked.map((r, i) => {
+                const tlColor = TL_FG[r.traffic_light] ?? 'var(--color-border)'
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--color-bg-strong)', borderRadius: 10 }}>
+                    <span style={{ fontSize: 18, width: 28, textAlign: 'center', flexShrink: 0 }}>{medals[i] ?? `${i + 1}.`}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</p>
+                      <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 5 }}>
+                        {r.taskCount} {r.taskCount === 1 ? 'acção' : 'acções'}
+                        {' · '}
+                        <span title="Objectivo — progresso do valor actual em direcção à meta">Obj {r.avgGoal.toFixed(0)}%</span>
+                        {' · '}
+                        <span title="Meta mensal — realizado vs planeado por mês">Meta {r.avgMeta.toFixed(0)}%</span>
+                      </p>
+                      {/* Mini dual progress bar */}
+                      <div style={{ display: 'flex', gap: 3 }}>
+                        <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--color-border)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${r.avgGoal}%`, background: tlColor, borderRadius: 2 }} />
+                        </div>
+                        <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--color-border)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${r.avgMeta}%`, background: tlColor, opacity: 0.55, borderRadius: 2 }} />
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: tlColor }} />
+                      <span style={{ fontSize: 14, fontWeight: 900, color: tlColor }}>{r.combinedScore.toFixed(0)}</span>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: TL_FG[r.traffic_light] ?? 'var(--color-border)' }} />
-                    <span style={{ fontSize: 14, fontWeight: 900, color: TL_FG[r.traffic_light] ?? 'var(--color-text)' }}>{r.avgScore.toFixed(0)}</span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
+            <p style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 10, fontStyle: 'italic' }}>
+              Obj = progresso actual vs meta · Meta = realizado vs metas mensais (actualizado nocturnamente)
+            </p>
           </Card>
         )
       })()}
@@ -949,7 +1088,7 @@ export default function ProjectDetailPage() {
                 milesDone={doneCount}
                 trafficLight={(t.performance?.traffic_light ?? 'YELLOW') as 'GREEN' | 'YELLOW' | 'RED'}
                 ownerLabel={taskOwnerLabel(t)}
-                onClick={() => navigate(`/tasks/${t.id}`)}
+                onClick={() => setPreviewTaskId(t.id)}
               />
             )
           })}
@@ -1205,6 +1344,7 @@ export default function ProjectDetailPage() {
         defaultReceiverId={project.creator?.id}
         defaultReceiverName={project.creator?.name}
       />
+
     </div>
   )
 }

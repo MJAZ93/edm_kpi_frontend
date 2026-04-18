@@ -157,7 +157,7 @@ export default function DepartamentoDetailPage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 18, fontWeight: 900, color: wc.text }}>{w.total_score}</span>
-                    <TrafficLight value={wTl} size="sm" />
+                    <TrafficLight status={wTl} size="sm" />
                   </div>
                   <ChevronRight size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
                 </div>
@@ -275,7 +275,7 @@ export default function DepartamentoDetailPage() {
                   {t.status === 'DONE' ? 'Concluída' : t.status === 'ACTIVE' ? 'Activa' : t.status}
                 </Badge>
                 <div style={{ width: 60 }}>
-                  <ProgressBar value={Math.max(0, Math.min(100, t.progress_pct ?? 0))} max={100} height={4} variant={t.is_overdue ? 'red' : 'default'} />
+                  <ProgressBar value={Math.max(0, Math.min(100, t.progress_pct ?? 0))} max={100} height={4} variant={t.is_overdue ? 'red' : 'auto'} />
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text)', minWidth: 32, textAlign: 'right' }}>
                   {Math.max(0, Math.min(100, t.progress_pct ?? 0)).toFixed(0)}%

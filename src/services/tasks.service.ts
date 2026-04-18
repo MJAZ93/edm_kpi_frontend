@@ -16,4 +16,10 @@ export const tasksService = {
 
   remove: (id: number) =>
     api.delete(`/private/tasks/${id}`).then(r => r.data),
+
+  listProgress: (id: number) =>
+    api.get<{ entries: Array<{ period: string; value: number; id: number }> }>(`/private/tasks/${id}/progress`).then(r => r.data),
+
+  updateProgress: (id: number, currentValue: number, period: string) =>
+    api.patch(`/private/tasks/${id}/progress`, { current_value: currentValue, period }).then(r => r.data),
 }

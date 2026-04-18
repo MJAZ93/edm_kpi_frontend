@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, FileText, MapPin, Target, Pencil, User, Trophy, Trash2, MessageSquare } from 'lucide-react'
+import { Plus, FileText, MapPin, Target, Pencil, User, Trophy, Trash2, MessageSquare, TrendingUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { tasksService } from '../../services/tasks.service'
 import { milestonesService } from '../../services/milestones.service'
@@ -26,10 +26,9 @@ import Tabs from '../../components/ui/Tabs'
 import ProgressBar from '../../components/ui/ProgressBar'
 import MilestoneCard from '../../components/domain/MilestoneCard'
 import BlockerCard from '../../components/domain/BlockerCard'
-import ProgressModal from '../../components/domain/ProgressModal'
+import ProgressModal, { buildPeriodOptions } from '../../components/domain/ProgressModal'
 import MilestoneDetailModal from '../../components/domain/MilestoneDetailModal'
-import ForecastAlert from '../../components/domain/ForecastAlert'
-import ForecastChart from '../../components/charts/ForecastChart'
+import MetaRealizadoChart from '../../components/charts/MetaRealizadoChart'
 import ScopeMap from '../../components/map/ScopeMap'
 import HistoryTab from '../../components/domain/HistoryTab'
 import TaskForm from './TaskForm'
@@ -106,6 +105,11 @@ interface IndicadorFormProps {
   taskTotalPlanned?: number  // sum of already-created indicadores
   taskAggType?: string       // SUM_UP, SUM_DOWN, AVG, LAST, MANUAL
   isReduction?: boolean      // target < start (lower = better)
+  /** Optional per-month Meta values. Only shown on CREATE (not edit). */
+  msMonthly?: Record<string, string>
+  setMsMonthly?: (v: Record<string, string>) => void
+  /** When true, the monthly meta grid is rendered in the form. */
+  showMonthlyGrid?: boolean
 }
 
 const FREQ_OPTS = [
@@ -124,7 +128,7 @@ const MS_AGG_OPTS = [
   { value: 'MANUAL', label: 'Manual' },
 ]
 
-function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msScopeId, setMsScopeId, msFrequency, setMsFrequency, msPlanned, setMsPlanned, msDate, setMsDate, msNotes, setMsNotes, ascs, regioes, goalLabel, deptUsers, msAssignedTo, setMsAssignedTo, msAggType, setMsAggType, currentUserId, taskStartDate, taskEndDate, taskTargetValue, taskTotalPlanned, taskAggType, isReduction }: IndicadorFormProps) {
+function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msScopeId, setMsScopeId, msFrequency, setMsFrequency, msPlanned, setMsPlanned, msDate, setMsDate, msNotes, setMsNotes, ascs, regioes, goalLabel, deptUsers, msAssignedTo, setMsAssignedTo, msAggType, setMsAggType, currentUserId, taskStartDate, taskEndDate, taskTargetValue, taskTotalPlanned, taskAggType, isReduction, msMonthly, setMsMonthly, showMonthlyGrid }: IndicadorFormProps) {
   const scopeEntityOptions = msScopeType === 'ASC'
     ? ascs.map(a => ({ value: String(a.id), label: a.name }))
     : msScopeType === 'REGIAO'
@@ -318,6 +322,109 @@ function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
         </div>
       )}
 
+      {/* ── Metas mensais (opcional, só em criação) */}
+      {showMonthlyGrid && taskStartDate && taskEndDate && msMonthly && setMsMonthly && (() => {
+        // Build list of months covering [taskStartDate, taskEndDate]
+        const start = new Date(taskStartDate)
+        const end = new Date(taskEndDate)
+        const months: string[] = []
+        const cur = new Date(start.getFullYear(), start.getMonth(), 1)
+        const stop = new Date(end.getFullYear(), end.getMonth(), 1)
+        while (cur <= stop) {
+          months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`)
+          cur.setMonth(cur.getMonth() + 1)
+        }
+
+        const plannedGlobal = Number(msPlanned) || 0
+        const sumMonthly = months.reduce((s, m) => s + (Number(msMonthly[m]) || 0), 0)
+        const overGlobal = plannedGlobal > 0 && sumMonthly > plannedGlobal + 0.001
+        const fullyCovered = plannedGlobal > 0 && Math.abs(sumMonthly - plannedGlobal) < 0.001
+        const distributeEvenly = () => {
+          if (!plannedGlobal || months.length === 0) return
+          const per = plannedGlobal / months.length
+          const next: Record<string, string> = {}
+          months.forEach(m => { next[m] = String(Math.round(per * 100) / 100) })
+          setMsMonthly(next)
+        }
+        const clearAll = () => setMsMonthly({})
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <MsSectionHeader icon={<Target size={12} style={{ color: 'var(--color-primary)' }} />} label="Metas mensais (opcional)" />
+            <div style={{ padding: '8px 12px', fontSize: 11, color: 'var(--color-text-muted)', background: 'var(--color-primary-soft)', borderRadius: 8, border: '1px solid var(--color-border)', lineHeight: 1.5 }}>
+              Pode distribuir a meta pelos meses agora ou mais tarde. A soma não pode exceder a meta total
+              {plannedGlobal > 0 ? ` (${plannedGlobal.toLocaleString('pt-PT')})` : ''}.
+            </div>
+
+            {/* Summary row + helpers */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+              padding: '8px 12px', borderRadius: 8,
+              background: overGlobal ? 'var(--color-traffic-red-bg)' : fullyCovered ? 'var(--color-traffic-green-bg)' : 'var(--color-surface-muted)',
+              border: `1px solid ${overGlobal ? 'rgba(220,38,38,0.25)' : fullyCovered ? 'rgba(22,163,74,0.2)' : 'var(--color-border)'}`,
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700 }}>
+                <span style={{ color: 'var(--color-text-muted)' }}>Soma mensal:</span>{' '}
+                <span style={{ color: overGlobal ? 'var(--color-traffic-red)' : fullyCovered ? 'var(--color-traffic-green)' : 'var(--color-text)' }}>
+                  {sumMonthly.toLocaleString('pt-PT')}
+                </span>
+                {plannedGlobal > 0 && (
+                  <span style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
+                    {' '}/ {plannedGlobal.toLocaleString('pt-PT')}
+                    {overGlobal ? ` (+${(sumMonthly - plannedGlobal).toLocaleString('pt-PT')})` : ''}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" onClick={distributeEvenly} disabled={!plannedGlobal}
+                  style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-strong)', color: 'var(--color-text)', cursor: plannedGlobal ? 'pointer' : 'not-allowed', opacity: plannedGlobal ? 1 : 0.5 }}>
+                  Distribuir igualmente
+                </button>
+                <button type="button" onClick={clearAll}
+                  style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700, borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-strong)', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
+                  Limpar
+                </button>
+              </div>
+            </div>
+            {overGlobal && (
+              <p style={{ fontSize: 11, color: 'var(--color-traffic-red)', fontWeight: 700, margin: 0 }}>
+                A soma das metas mensais não pode ultrapassar a meta total.
+              </p>
+            )}
+
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden', background: 'var(--color-surface-strong)' }}>
+              <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                {months.map((m) => {
+                  const d = new Date(`${m}-01`)
+                  const label = d.toLocaleDateString('pt-MZ', { month: 'long', year: 'numeric' })
+                  return (
+                    <div key={m} style={{
+                      display: 'grid', gridTemplateColumns: '1fr 120px', gap: 10,
+                      padding: '6px 12px', borderBottom: '1px solid var(--color-border)', alignItems: 'center',
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)' }}>{label}</div>
+                      <input
+                        type="number"
+                        step="any"
+                        min={0}
+                        placeholder="Meta"
+                        value={msMonthly[m] ?? ''}
+                        onChange={e => setMsMonthly({ ...msMonthly, [m]: e.target.value })}
+                        style={{
+                          padding: '5px 10px', fontSize: 13, fontWeight: 700,
+                          border: '1.5px solid var(--color-border-strong)', borderRadius: 8,
+                          background: 'var(--color-surface)', color: 'var(--color-text)', outline: 'none', width: '100%',
+                        }}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── Notas */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <MsSectionHeader icon={<FileText size={12} style={{ color: 'var(--color-primary)' }} />} label="Notas" />
@@ -328,6 +435,47 @@ function IndicadorForm({ msTitle, setMsTitle, msScopeType, setMsScopeType, msSco
   )
 }
 
+/** Inline component that fetches and renders the task-level Meta vs Realizado chart. */
+function TaskMetaRealizadoChart({
+  taskId,
+  unit,
+  aggregationType,
+  taskTargetValue,
+  taskStartValue,
+  isReduction,
+}: {
+  taskId: number
+  unit?: string
+  aggregationType?: string
+  taskTargetValue?: number
+  taskStartValue?: number
+  isReduction?: boolean
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['task-monthly-chart', taskId],
+    queryFn: () => milestonesService.taskMonthlyChart(taskId),
+    enabled: !!taskId,
+    staleTime: 0,
+  })
+
+  if (isLoading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}><Spinner size="md" /></div>
+  }
+  const rows = data?.rows ?? []
+  return (
+    <MetaRealizadoChart
+      data={rows}
+      unit={unit}
+      height={260}
+      emptyHint="Sem metas mensais definidas para os indicadores desta acção."
+      aggregationType={aggregationType}
+      taskTargetValue={taskTargetValue}
+      taskStartValue={taskStartValue}
+      isReduction={isReduction}
+    />
+  )
+}
+
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const taskId = Number(id)
@@ -335,11 +483,22 @@ export default function TaskDetailPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
 
-  /** Only the assigned user (milestone or task level) can edit milestone data.
-   *  Technicians (non-head DEPARTAMENTO) cannot open the full edit modal. */
+  /** Who can UPDATE PROGRESS on a milestone: ADMIN / CA, the assigned user
+   *  on the milestone or task — including technicians when they're assigned.
+   *  This mirrors the backend AddProgress permission check. */
+  const canUpdateProgress = (m: { assigned_to?: number }) => {
+    if (user?.role === 'ADMIN' || user?.role === 'CA') return true
+    const isAssignedMs = m.assigned_to === user?.id
+    const isAssignedTask = (task as any)?.assigned_to === user?.id
+    return isAssignedMs || isAssignedTask
+  }
+
+  /** Who can EDIT the milestone form (title, scope, planned_value, dates…):
+   *  ADMIN / CA or the assigned user — but NOT technicians (non-head
+   *  DEPARTAMENTO users), who can only record progress. */
   const canEditMilestone = (m: { assigned_to?: number }) => {
+    if (user?.role === 'ADMIN' || user?.role === 'CA') return true
     if (isTechnician) return false
-    if (user?.role === 'CA') return true
     const isAssignedMs = m.assigned_to === user?.id
     const isAssignedTask = (task as any)?.assigned_to === user?.id
     return isAssignedMs || isAssignedTask
@@ -366,6 +525,9 @@ export default function TaskDetailPage() {
   const [msNotes, setMsNotes] = useState('')
   const [msAssignedTo, setMsAssignedTo] = useState('')
   const [msAggType, setMsAggType] = useState('SUM_UP')
+  // Optional per-month meta (planned_value) entered at milestone creation time.
+  // Keys are periods "YYYY-MM"; values are the text typed by the user.
+  const [msMonthly, setMsMonthly] = useState<Record<string, string>>({})
   const [feedbackModal, setFeedbackModal] = useState(false)
   const [feedbackMs, setFeedbackMs] = useState<{ id: number; title: string; assigneeName?: string; assigneeId?: number } | null>(null)
 
@@ -374,14 +536,28 @@ export default function TaskDetailPage() {
   const [blDesc, setBlDesc] = useState('')
   const [blSla, setBlSla] = useState('3')
 
-  // Manual value override
+  // Manual value override (new period)
   const [manualValue, setManualValue] = useState('')
+  const [manualPeriod, setManualPeriod] = useState('')
   const [showManualInput, setShowManualInput] = useState(false)
+  // History inline edit (existing period)
+  const [editingHistoryPeriod, setEditingHistoryPeriod] = useState<string | null>(null)
+  const [editingHistoryValue, setEditingHistoryValue] = useState('')
 
   const { data: task, isLoading } = useQuery({
     queryKey: ['tasks', taskId],
     queryFn: () => tasksService.get(taskId),
   })
+
+  // Progress history — used to filter out already-entered periods + power the history tab
+  const { data: progressData, refetch: refetchProgress } = useQuery({
+    queryKey: ['task-progress', taskId],
+    queryFn: () => tasksService.listProgress(taskId),
+    enabled: !!taskId,
+    staleTime: 0,
+  })
+  const progressEntries = progressData?.entries ?? []
+  const usedPeriods = useMemo(() => new Set(progressEntries.map((e: any) => e.period)), [progressEntries])
 
   const { data: indicadoresData } = useQuery({
     queryKey: ['indicadores', { task_id: taskId }],
@@ -395,17 +571,11 @@ export default function TaskDetailPage() {
     enabled: !!taskId,
   })
 
-  const { data: forecast } = useQuery({
-    queryKey: ['dashboard', 'forecast', { task_id: taskId }],
-    queryFn: () => dashboardService.getForecast(taskId),
-    enabled: !!taskId,
-  })
-
-  const { data: memberOverview } = useQuery({
-    queryKey: ['dashboard', 'member-overview'],
+const { data: memberOverview } = useQuery({
+    queryKey: ['dashboard', 'member-overview', user?.id],
     queryFn: dashboardService.getMemberOverview,
     enabled: user?.role === 'DEPARTAMENTO',
-    staleTime: 60_000,
+    staleTime: 0,
   })
   // Technician = DEPARTAMENTO role but not a dept head
   const isTechnician = user?.role === 'DEPARTAMENTO' && memberOverview?.is_dept_head === false
@@ -451,8 +621,17 @@ export default function TaskDetailPage() {
   })
 
   const saveManualValue = useMutation({
-    mutationFn: (val: number) => tasksService.update(taskId, { current_value: val } as any),
-    onSuccess: () => { toast.success('Valor actual actualizado.'); qc.invalidateQueries({ queryKey: ['tasks', taskId] }); setShowManualInput(false) },
+    mutationFn: ({ val, period }: { val: number; period: string }) =>
+      tasksService.updateProgress(taskId, val, period),
+    onSuccess: () => {
+      toast.success('Valor actual actualizado.')
+      qc.invalidateQueries({ queryKey: ['tasks', taskId] })
+      qc.invalidateQueries({ queryKey: ['task-monthly-chart', taskId] })
+      refetchProgress()
+      setShowManualInput(false)
+      setManualValue('')
+      setManualPeriod('')
+    },
     onError: () => toast.error('Erro ao actualizar valor.'),
   })
 
@@ -463,8 +642,32 @@ export default function TaskDetailPage() {
   })
 
   const createMs = useMutation({
-    mutationFn: (p: CreateMilestonePayload) => milestonesService.create(taskId, p),
-    onSuccess: () => { toast.success('Indicador criado.'); qc.invalidateQueries({ queryKey: ['indicadores'] }); setIndicadorModal(false) },
+    mutationFn: async (p: CreateMilestonePayload) => {
+      const created = await milestonesService.create(taskId, p)
+      // If the user filled any monthly metas, push them now. We don't block
+      // creation on failure here — a toast will surface any issue.
+      const monthlyRows = Object.entries(msMonthly)
+        .filter(([, v]) => v !== '' && v !== undefined && v !== null)
+        .map(([period, v]) => ({ period, planned_value: Number(v) || 0 }))
+      if (monthlyRows.length > 0) {
+        try {
+          await milestonesService.bulkUpsertMonthlyTargets(created.id, monthlyRows)
+        } catch {
+          // monthly rows may not exist yet if auto-generation is still in
+          // flight — retry once after a short delay
+          await new Promise(r => setTimeout(r, 400))
+          await milestonesService.bulkUpsertMonthlyTargets(created.id, monthlyRows)
+        }
+      }
+      return created
+    },
+    onSuccess: () => {
+      toast.success('Indicador criado.')
+      qc.invalidateQueries({ queryKey: ['indicadores'] })
+      qc.invalidateQueries({ queryKey: ['task-monthly-chart', taskId] })
+      qc.invalidateQueries({ queryKey: ['project-monthly-chart'] })
+      setIndicadorModal(false)
+    },
     onError: () => toast.error('Erro ao criar indicador.'),
   })
 
@@ -581,6 +784,7 @@ export default function TaskDetailPage() {
     setMsNotes('')
     setMsAssignedTo('')
     setMsAggType('SUM_UP')
+    setMsMonthly({})
   }
 
   const openCreateMilestone = () => {
@@ -616,14 +820,7 @@ export default function TaskDetailPage() {
     return undefined
   }
 
-  const forecastData = forecast ? [
-    { period: 'Início', actual: forecast.start_value },
-    { period: 'Actual', actual: forecast.current_value },
-    { period: 'Projecção', projected: forecast.current_value },
-    { period: 'Fim', projected: forecast.projected_final_value },
-  ] : []
-
-  const handleCreateMs = () => {
+const handleCreateMs = () => {
     createMs.mutate({
       title: msTitle, scope_type: msScopeType || undefined,
       scope_id: msScopeId ? Number(msScopeId) : undefined,
@@ -714,16 +911,47 @@ export default function TaskDetailPage() {
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Actual</p>
             {aggType === 'MANUAL' && !isTechnician && showManualInput ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input
-                  type="number" step="any" autoFocus
-                  value={manualValue}
-                  onChange={e => setManualValue(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && manualValue) saveManualValue.mutate(parseFloat(manualValue)); if (e.key === 'Escape') setShowManualInput(false) }}
-                  style={{ width: 90, padding: '4px 8px', fontSize: 18, fontWeight: 800, textAlign: 'center', border: '2px solid var(--color-primary)', borderRadius: 8, background: 'var(--color-surface-strong)', color: 'var(--color-primary)', outline: 'none' }}
-                />
-                <button onClick={() => manualValue && saveManualValue.mutate(parseFloat(manualValue))} style={{ background: 'var(--color-primary)', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>OK</button>
-                <button onClick={() => setShowManualInput(false)} style={{ background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>✕</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                <select
+                  value={manualPeriod}
+                  onChange={e => setManualPeriod(e.target.value)}
+                  style={{
+                    padding: '5px 10px', borderRadius: 8,
+                    border: '1.5px solid var(--color-border)',
+                    background: 'var(--color-bg)', color: 'var(--color-text)',
+                    fontSize: 12, fontWeight: 700, outline: 'none', cursor: 'pointer', width: '100%',
+                  }}
+                >
+                  <option value="">Período…</option>
+                  {buildPeriodOptions(
+                    task?.frequency || 'MONTHLY',
+                    task?.start_date?.slice(0, 10),
+                    task?.end_date?.slice(0, 10),
+                  ).filter(opt => !usedPeriods.has(opt.value)).map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="number" step="any"
+                    value={manualValue}
+                    onChange={e => setManualValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && manualValue && manualPeriod)
+                        saveManualValue.mutate({ val: parseFloat(manualValue), period: manualPeriod })
+                      if (e.key === 'Escape') { setShowManualInput(false); setManualPeriod('') }
+                    }}
+                    style={{ width: 90, padding: '4px 8px', fontSize: 18, fontWeight: 800, textAlign: 'center', border: '2px solid var(--color-primary)', borderRadius: 8, background: 'var(--color-surface-strong)', color: 'var(--color-primary)', outline: 'none' }}
+                  />
+                  <button
+                    disabled={!manualValue || !manualPeriod || saveManualValue.isPending}
+                    onClick={() => manualValue && manualPeriod && saveManualValue.mutate({ val: parseFloat(manualValue), period: manualPeriod })}
+                    style={{ background: (manualValue && manualPeriod) ? 'var(--color-primary)' : 'var(--color-border)', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: (manualValue && manualPeriod) ? 'pointer' : 'not-allowed' }}
+                  >
+                    {saveManualValue.isPending ? '…' : 'OK'}
+                  </button>
+                  <button onClick={() => { setShowManualInput(false); setManualPeriod('') }} style={{ background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>✕</button>
+                </div>
               </div>
             ) : (
               <p
@@ -783,22 +1011,8 @@ export default function TaskDetailPage() {
         )}
       </Card>
 
-      {forecast && (
-        <div style={{ marginBottom: 20 }}>
-          <ForecastAlert
-            willReachTarget={forecast.will_reach_target}
-            targetValue={forecast.target_value}
-            startValue={forecast.start_value}
-            velocityPerDay={forecast.velocity_per_day}
-            daysRemaining={forecast.days_remaining}
-            projectedFinalValue={forecast.projected_final_value}
-            message={forecast.alert_message ?? undefined}
-          />
-        </div>
-      )}
-
-      {/* ══ INDICADORES + PREVISÃO (side-by-side) ══════════════════════════ */}
-      <div style={{ display: 'grid', gridTemplateColumns: forecast ? '1fr 1fr' : '1fr', gap: 20, marginBottom: 20 }}>
+      {/* ══ INDICADORES + META vs REALIZADO (side-by-side) ════════════════ */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
         {/* Left — Rich indicator list */}
         <Card variant="elevated" style={{ maxHeight: 520, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexShrink: 0 }}>
@@ -891,35 +1105,23 @@ export default function TaskDetailPage() {
           </div>
         </Card>
 
-        {/* Right — Forecast chart */}
-        {forecast && (
-          <Card variant="elevated" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <FileText size={15} style={{ color: 'var(--color-primary)' }} />
-              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Previsão
-              </p>
-            </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              {forecastData.length > 0
-                ? <ForecastChart data={forecastData} target={forecast.target_value} height={280} willReach={forecast.will_reach_target} />
-                : <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>Sem dados de previsão.</p>
-              }
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 16 }}>
-              {[
-                { l: 'Velocidade/dia', v: Math.round(forecast.velocity_per_day).toLocaleString('pt-PT') },
-                { l: 'Dias restantes', v: forecast.days_remaining },
-                { l: 'Projecção final', v: forecast.projected_final_value.toLocaleString('pt-PT') },
-              ].map(item => (
-                <div key={item.l} style={{ textAlign: 'center', padding: '10px 12px', background: 'var(--color-surface-muted)', borderRadius: 10 }}>
-                  <p style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 3 }}>{item.l}</p>
-                  <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-text)' }}>{item.v}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
+        {/* Right — Meta vs Realizado chart with projection */}
+        <Card variant="elevated" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <TrendingUp size={15} style={{ color: 'var(--color-primary)' }} />
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Meta vs Realizado — mensal
+            </p>
+          </div>
+          <TaskMetaRealizadoChart
+            taskId={taskId}
+            unit={task.goal_label}
+            aggregationType={aggType}
+            taskTargetValue={task.target_value ?? undefined}
+            taskStartValue={task.start_value ?? undefined}
+            isReduction={isReduction}
+          />
+        </Card>
       </div>
 
       {/* ══ MAPA + COLABORADORES (side-by-side) ═══════════════════════════ */}
@@ -1061,6 +1263,7 @@ export default function TaskDetailPage() {
       {/* ══ TABS SECUNDÁRIAS ══════════════════════════════════════════════ */}
       <Tabs activeKey={activeTab} onChange={setActiveTab} tabs={[
         { key: 'blockers', label: `Constrangimentos (${blockers.length})` },
+        ...(aggType === 'MANUAL' && !isTechnician ? [{ key: 'valores', label: `Histórico de Valores (${progressEntries.length})` }] : []),
         { key: 'history', label: 'Histórico' },
         { key: 'feedback', label: 'Feedback' },
       ]}>
@@ -1089,6 +1292,81 @@ export default function TaskDetailPage() {
               </div>
             </div>
           )
+
+          if (activeTab === 'valores') {
+            const periodOpts = buildPeriodOptions(
+              task.frequency || 'MONTHLY',
+              task.start_date?.slice(0, 10),
+              task.end_date?.slice(0, 10),
+            )
+            const labelFor = (p: string) => periodOpts.find(o => o.value === p)?.label ?? p
+            const sortedEntries = [...progressEntries].sort((a: any, b: any) => b.period.localeCompare(a.period))
+            return (
+              <Card variant="elevated">
+                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
+                  Histórico de Valores — {task.goal_label}
+                </p>
+                {sortedEntries.length === 0 ? (
+                  <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Sem valores registados ainda.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {sortedEntries.map((e: any) => {
+                      const isEditing = editingHistoryPeriod === e.period
+                      return (
+                        <div key={e.period} style={{
+                          display: 'flex', alignItems: 'center', gap: 12,
+                          padding: '10px 14px', borderRadius: 10,
+                          background: 'var(--color-bg-strong)',
+                          border: `1.5px solid ${isEditing ? 'var(--color-primary)' : 'transparent'}`,
+                        }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text)' }}>{labelFor(e.period)}</p>
+                            <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>{e.period}</p>
+                          </div>
+                          {isEditing ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="number" step="any" autoFocus
+                                value={editingHistoryValue}
+                                onChange={ev => setEditingHistoryValue(ev.target.value)}
+                                onKeyDown={ev => {
+                                  if (ev.key === 'Enter' && editingHistoryValue)
+                                    saveManualValue.mutate({ val: parseFloat(editingHistoryValue), period: e.period })
+                                  if (ev.key === 'Escape') setEditingHistoryPeriod(null)
+                                }}
+                                style={{ width: 90, padding: '4px 8px', fontSize: 15, fontWeight: 800, textAlign: 'center', border: '2px solid var(--color-primary)', borderRadius: 8, background: 'var(--color-surface-strong)', color: 'var(--color-primary)', outline: 'none' }}
+                              />
+                              <button
+                                disabled={!editingHistoryValue || saveManualValue.isPending}
+                                onClick={() => editingHistoryValue && saveManualValue.mutate({ val: parseFloat(editingHistoryValue), period: e.period })}
+                                style={{ background: editingHistoryValue ? 'var(--color-primary)' : 'var(--color-border)', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: editingHistoryValue ? 'pointer' : 'not-allowed' }}
+                              >
+                                {saveManualValue.isPending ? '…' : 'OK'}
+                              </button>
+                              <button onClick={() => setEditingHistoryPeriod(null)} style={{ background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>✕</button>
+                            </div>
+                          ) : (
+                            <>
+                              <p style={{ fontSize: 20, fontWeight: 900, color: 'var(--color-primary)' }}>
+                                {Number(e.value).toLocaleString('pt-PT')}
+                              </p>
+                              <button
+                                onClick={() => { setEditingHistoryPeriod(e.period); setEditingHistoryValue(String(e.value)) }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 7, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                              >
+                                <Pencil size={11} /> Editar
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </Card>
+            )
+          }
+
           if (activeTab === 'history') return <HistoryTab entityType="task" entityId={task.id} valueLabel="Valor actual" />
           if (activeTab === 'feedback') return <EntityFeedbackTab targetType="TASK" targetId={task.id} />
           return null
@@ -1110,6 +1388,11 @@ export default function TaskDetailPage() {
       </Modal>
 
       {/* Create Indicador Modal */}
+      {(() => {
+        const plannedGlobalNum = Number(msPlanned) || 0
+        const sumMonthlyNum = Object.values(msMonthly).reduce((s, v) => s + (Number(v) || 0), 0)
+        const monthlyOverGlobal = plannedGlobalNum > 0 && sumMonthlyNum > plannedGlobalNum + 0.001
+        return (
       <Modal open={indicadorModal} onClose={() => setIndicadorModal(false)} title="Novo Indicador" width={540}
         footer={
           <>
@@ -1119,7 +1402,11 @@ export default function TaskDetailPage() {
               icon={<Plus size={13} />}
               onClick={handleCreateMs}
               loading={createMs.isPending}
-              disabled={task.owner_type === 'DEPARTAMENTO' && deptUsers.length > 0 && !msAssignedTo}
+              disabled={
+                (task.owner_type === 'DEPARTAMENTO' && deptUsers.length > 0 && !msAssignedTo) ||
+                monthlyOverGlobal
+              }
+              title={monthlyOverGlobal ? 'A soma das metas mensais não pode ser maior que a meta total' : undefined}
             >
               Criar
             </Button>
@@ -1147,8 +1434,13 @@ export default function TaskDetailPage() {
           taskTotalPlanned={totalPlanned}
           taskAggType={aggType}
           isReduction={isReduction}
+          msMonthly={msMonthly}
+          setMsMonthly={setMsMonthly}
+          showMonthlyGrid
         />
       </Modal>
+        )
+      })()}
 
       <Modal open={!!editingMilestone} onClose={() => setEditingMilestone(null)} title="Editar Indicador" width={540}
         footer={
@@ -1203,9 +1495,14 @@ export default function TaskDetailPage() {
             setProgressMs(null)
             qc.invalidateQueries({ queryKey: ['indicadores'] })
             qc.invalidateQueries({ queryKey: ['tasks', taskId] })
+            // Refresh the Meta vs Realizado chart at task & project level.
+            qc.invalidateQueries({ queryKey: ['task-monthly-chart', taskId] })
+            qc.invalidateQueries({ queryKey: ['project-monthly-chart'] })
+            qc.invalidateQueries({ queryKey: ['projects', 'execution-history'] })
             if (updatedMsId) {
               qc.invalidateQueries({ queryKey: ['milestone-detail', updatedMsId] })
               qc.invalidateQueries({ queryKey: ['milestone-progress', updatedMsId] })
+              qc.invalidateQueries({ queryKey: ['milestone-monthly-targets', updatedMsId] })
             }
           }}
         />
@@ -1224,9 +1521,10 @@ export default function TaskDetailPage() {
         isReduction={isReduction}
         taskStartDate={task?.start_date ? task.start_date.slice(0, 10) : undefined}
         taskEndDate={task?.end_date ? task.end_date.slice(0, 10) : undefined}
+        taskAggType={aggType}
         onUpdateProgress={(() => {
           const m = indicadores.find((m: any) => m.id === detailMsId)
-          return m && canEditMilestone(m) && m.status !== 'DONE' ? () => setProgressMs(m) : undefined
+          return m && canUpdateProgress(m) && m.status !== 'DONE' ? () => setProgressMs(m) : undefined
         })()}
         onEdit={(() => {
           const m = indicadores.find((m: any) => m.id === detailMsId)

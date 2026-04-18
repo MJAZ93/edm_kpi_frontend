@@ -47,7 +47,7 @@ export default function UserDetailPage() {
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-muted)' }}>
               <Mail size={12} /> {user.email}
             </span>
-            <Badge variant="neutral" size="sm">{user.role}</Badge>
+            <Badge variant="muted">{user.role}</Badge>
             {departments.map((d: any) => (
               <span key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, color: 'var(--color-text-muted)' }}>
                 <Building2 size={11} /> {d.name}
@@ -105,7 +105,7 @@ export default function UserDetailPage() {
                 <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: 10, fontSize: 12 }}
-                  formatter={(v: any, name: string) => [v, name === 'done' ? 'Concluídos' : 'Total']}
+                  formatter={(v: any, name: any) => [v, name === 'done' ? 'Concluídos' : 'Total']}
                 />
                 <Bar dataKey="total" fill="var(--color-border)" radius={[6, 6, 0, 0]} />
                 <Bar dataKey="done" radius={[6, 6, 0, 0]}>
@@ -126,7 +126,7 @@ export default function UserDetailPage() {
               Indicadores Atrasados
             </p>
             {overdueMilestones.length > 0 && (
-              <Badge variant="danger" size="sm">{overdueMilestones.length}</Badge>
+              <Badge variant="danger">{overdueMilestones.length}</Badge>
             )}
           </div>
           {overdueMilestones.length === 0 ? (
@@ -152,7 +152,7 @@ export default function UserDetailPage() {
                     <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
                       {ms.title}
                     </p>
-                    <Badge variant="danger" size="sm">{ms.days_overdue}d</Badge>
+                    <Badge variant="danger">{ms.days_overdue}d</Badge>
                   </div>
                   <p style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{ms.task_title} · {ms.project_title}</p>
                 </div>
@@ -169,7 +169,7 @@ export default function UserDetailPage() {
           <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
             Acções Atribuídas
           </p>
-          <Badge variant="neutral" size="sm">{tasks.length}</Badge>
+          <Badge variant="muted">{tasks.length}</Badge>
         </div>
         {tasks.length === 0 ? (
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0' }}>Sem acções atribuídas</p>
@@ -200,7 +200,7 @@ export default function UserDetailPage() {
                     {[t.project_name, t.dept_name].filter(Boolean).join(' · ')}
                   </p>
                 </div>
-                <Badge variant={t.status === 'COMPLETED' ? 'success' : t.status === 'CANCELLED' ? 'neutral' : 'warning'} size="sm">
+                <Badge variant={t.status === 'COMPLETED' ? 'success' : t.status === 'CANCELLED' ? 'muted' : 'warning'}>
                   {t.status === 'COMPLETED' ? 'Concluída' : t.status === 'CANCELLED' ? 'Cancelada' : 'Activa'}
                 </Badge>
                 <ChevronRight size={14} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
@@ -217,7 +217,7 @@ export default function UserDetailPage() {
           <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
             Todos os Indicadores
           </p>
-          <Badge variant="neutral" size="sm">{milestones.length}</Badge>
+          <Badge variant="muted">{milestones.length}</Badge>
         </div>
         {milestones.length === 0 ? (
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', padding: '20px 0' }}>Sem indicadores</p>
@@ -269,7 +269,6 @@ export default function UserDetailPage() {
                       <td style={{ padding: '10px 6px', textAlign: 'center' }}>
                         <Badge
                           variant={ms.status === 'DONE' ? 'success' : ms.status === 'BLOCKED' ? 'danger' : isOverdue ? 'danger' : 'warning'}
-                          size="sm"
                         >
                           {ms.status === 'DONE' ? 'Concluído' : ms.status === 'BLOCKED' ? 'Bloqueado' : isOverdue ? 'Atrasado' : 'Pendente'}
                         </Badge>

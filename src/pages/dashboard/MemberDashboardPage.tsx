@@ -101,8 +101,9 @@ export default function MemberDashboardPage() {
   const [updateMs, setUpdateMs] = useState<any | null>(null)
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['dashboard', 'member-overview'],
+    queryKey: ['dashboard', 'member-overview', user?.id],
     queryFn: dashboardService.getMemberOverview,
+    staleTime: 0,
   })
 
   const { data: feedbackData } = useQuery({
@@ -154,7 +155,7 @@ export default function MemberDashboardPage() {
   const handleProgressDone = () => {
     setUpdateMs(null)
     refetch()
-    qc.invalidateQueries({ queryKey: ['dashboard', 'member-overview'] })
+    qc.invalidateQueries({ queryKey: ['dashboard', 'member-overview', user?.id] })
   }
 
   // Overdue milestones

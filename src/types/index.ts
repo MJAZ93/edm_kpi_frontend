@@ -17,6 +17,7 @@ export interface User {
   email: string
   role: Role
   active?: boolean
+  force_password_change?: boolean
   /** Only set for DIRECAO role: "DIRECTION" = leads a Direcção, "REGION" = leads only a Região (read-only) */
   director_scope?: 'DIRECTION' | 'REGION'
 }
@@ -207,6 +208,32 @@ export interface MilestoneProgressEvent {
   photo_url?: string
   created_at?: string
   updated_at?: string
+}
+
+// ── Monthly Targets (metas mensais) ──────────────────────────────────────────
+//
+// Each indicador (milestone) has one row per month in the parent task's
+// date range. User fills planned_value (meta) and achieved_value (realizado).
+// Task and project charts are computed on the server by aggregating these
+// rows per period.
+export interface MilestoneMonthlyTarget {
+  id: number
+  milestone_id: number
+  period: string           // "YYYY-MM"
+  planned_value: number
+  achieved_value: number
+  notes?: string
+  created_at?: string
+  updated_at?: string
+}
+
+// Per-period row returned by /tasks/:id/monthly-chart and
+// /projects/:id/monthly-chart — already aggregated across children.
+export interface MonthlyChartRow {
+  period: string           // "YYYY-MM"
+  planned_value: number
+  achieved_value: number
+  exec_pct: number         // 0..100
 }
 
 // ── Blockers ──────────────────────────────────────────────────────────────────

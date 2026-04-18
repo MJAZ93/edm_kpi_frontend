@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   BarChart3, TrendingUp,
@@ -7,10 +7,13 @@ import {
 } from 'lucide-react'
 import { dashboardService } from '../../services/dashboard.service'
 import { projectsService } from '../../services/projects.service'
+import { tasksService } from '../../services/tasks.service'
 import { feedbackService } from '../../services/feedback.service'
+import TasksMetaPanel from '../../components/domain/TasksMetaPanel'
 import type { Feedback } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts'
+import InfoPopover from '../../components/ui/InfoPopover'
 import HoverReferenceLine from '../../components/charts/HoverReferenceLine'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -96,6 +99,7 @@ export default function CaDashboardPage() {
     queryKey: ['projects', 'execution-history', selectedPilar?.id],
     queryFn: () => projectsService.listExecutionHistory(selectedPilar!.id),
     enabled: !!selectedPilar?.id && chartTab === 'execucao',
+    staleTime: 0,
   })
 
   const { data: topDirecoes } = useQuery({
@@ -121,6 +125,20 @@ export default function CaDashboardPage() {
   const dirProjects = dirProjectsData?.data ?? []
   const pilarHistory = pilarHistoryData?.entries ?? []
 
+  // ── Tasks for Acções panel (one query per project in dirProjects) ─────────
+  const taskQueries = useQueries({
+    queries: dirProjects.map((p: any) => ({
+      queryKey: ['tasks', { project_id: p.id }],
+      queryFn: () => tasksService.list(p.id, { limit: 200 }),
+      enabled: !!p.id,
+      staleTime: 30_000,
+    })),
+  })
+  const allTasks = useMemo(
+    () => taskQueries.flatMap(q => q.data?.data ?? []),
+    [taskQueries],
+  )
+
   // Auto-select first direcao when list loads and nothing is selected
   React.useEffect(() => {
     if (dirList.length > 0 && !selected) {
@@ -128,17 +146,17 @@ export default function CaDashboardPage() {
     }
   }, [dirList]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-select first pilar when projects load
+  // Auto-select or reset pilar when the selected direção OR the loaded projects change.
+  // Combined into ONE effect so there's no race between "clear" and "select" side-effects.
   React.useEffect(() => {
-    if (dirProjects.length > 0 && (!selectedPilar || !dirProjects.find((p: any) => p.id === selectedPilar?.id))) {
-      setSelectedPilar(dirProjects[0])
+    if (dirProjects.length > 0) {
+      if (!selectedPilar || !dirProjects.find((p: any) => p.id === selectedPilar?.id)) {
+        setSelectedPilar(dirProjects[0])
+      }
+    } else {
+      setSelectedPilar(null)
     }
-  }, [dirProjects]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Clear selected pilar when direcao changes
-  React.useEffect(() => {
-    setSelectedPilar(null)
-  }, [selected?.id])
+  }, [selected?.id, dirProjects]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const today   = new Date()
   const dayName = today.toLocaleDateString('pt-MZ', { weekday: 'long' })
@@ -435,20 +453,36 @@ export default function CaDashboardPage() {
                   }))
 
                   return (
-                    <ResponsiveContainer width="100%" height={370}>
-                      <LineChart data={chartData} margin={{ top: 28, right: 60, left: 0, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,80,20,0.06)" vertical={false} />
-                        <XAxis dataKey="period" tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--color-text)' }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: '#aaa' }} axisLine={false} tickLine={false} domain={[0, (max: number) => Math.max(100, Math.ceil(max * 1.1))]} tickFormatter={(v: number) => `${v}%`} />
-                        <Tooltip
-                          contentStyle={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: 'var(--shadow-soft)', fontSize: 13 }}
-                          formatter={(value: any, name: string) => [`${Number(value).toFixed(1)}%`, name === 'exec_pct' ? 'Período' : 'Acumulado']}
-                        />
-                        <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="8 4" strokeWidth={1.5} label={{ value: 'Meta: 100%', fill: '#16a34a', fontSize: 11, fontWeight: 700 }} />
-                        <Line type="monotone" dataKey="exec_pct" name="Período" stroke="#e8670a" strokeWidth={2.5} dot={{ r: 5, fill: '#e8670a', strokeWidth: 0 }} />
-                        <Line type="monotone" dataKey="cum_exec_pct" name="Acumulado" stroke="#4a6fa5" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 4, fill: '#4a6fa5', strokeWidth: 0 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ position: 'absolute', top: 0, right: 0, zIndex: 10 }}>
+                        <InfoPopover title="Como ler este gráfico">
+                          <p style={{ margin: '0 0 10px', fontWeight: 700, color: 'var(--color-primary)', fontSize: 12 }}>🟠 Execução do período</p>
+                          <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--color-text-muted)' }}>Progresso médio das acções cujos indicadores têm data nesse mês específico. Reflecte o esforço registado naquele mês.</p>
+                          <p style={{ margin: '0 0 10px', fontWeight: 700, color: '#4a6fa5', fontSize: 12 }}>🔵 Execução acumulada</p>
+                          <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)' }}>Média corrida desde o início até ao mês em questão. Mostra a tendência geral de progresso ao longo do tempo.</p>
+                        </InfoPopover>
+                      </div>
+                      <ResponsiveContainer width="100%" height={370}>
+                        <LineChart data={chartData} margin={{ top: 28, right: 60, left: 0, bottom: 4 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,80,20,0.06)" vertical={false} />
+                          <XAxis dataKey="period" tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--color-text)' }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 11, fill: '#aaa' }} axisLine={false} tickLine={false} domain={[0, (max: number) => Math.max(100, Math.ceil(max * 1.1))]} tickFormatter={(v: number) => `${v}%`} />
+                          <Tooltip
+                            contentStyle={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: 'var(--shadow-soft)', fontSize: 13 }}
+                            formatter={(value: any, name: any) => [`${Number(value).toFixed(1)}%`, name === 'exec_pct' ? 'Execução do período' : 'Execução acumulada']}
+                          />
+                          <Legend
+                            iconType="circle"
+                            iconSize={8}
+                            wrapperStyle={{ fontSize: 12, fontWeight: 600, paddingTop: 4 }}
+                            formatter={(value: string) => value === 'exec_pct' ? 'Execução do período' : 'Execução acumulada'}
+                          />
+                          <ReferenceLine y={100} stroke="#16a34a" strokeDasharray="8 4" strokeWidth={1.5} label={{ value: 'Meta: 100%', fill: '#16a34a', fontSize: 11, fontWeight: 700 }} />
+                          <Line type="monotone" dataKey="exec_pct" name="exec_pct" stroke="#e8670a" strokeWidth={2.5} dot={{ r: 5, fill: '#e8670a', strokeWidth: 0 }} />
+                          <Line type="monotone" dataKey="cum_exec_pct" name="cum_exec_pct" stroke="#4a6fa5" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 4, fill: '#4a6fa5', strokeWidth: 0 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   )
                 })() : (() => {
                   const sorted = [...pilarHistory]
@@ -666,6 +700,24 @@ export default function CaDashboardPage() {
           </Card>
         </div>
       )}
+
+      {/* ── Acções — Metas Mensais ────────────────────────────────────────────── */}
+      {selected && selectedPilar && (() => {
+        const pilarTasks = allTasks.filter((t: any) => t.project_id === selectedPilar.id)
+        return pilarTasks.length > 0 ? (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Acções · Metas Mensais
+              </p>
+              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                — {selectedPilar.title}
+              </span>
+            </div>
+            <TasksMetaPanel tasks={pilarTasks} height={580} />
+          </div>
+        ) : null
+      })()}
 
       {/* ── Map ──────────────────────────────────────────────────────────────── */}
       <Card variant="elevated">

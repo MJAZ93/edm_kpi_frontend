@@ -1,5 +1,13 @@
 import api from './api'
-import type { Milestone, MilestoneProgressEvent, CreateMilestonePayload, UpdateMilestonePayload, PaginatedResponse } from '../types'
+import type {
+  Milestone,
+  MilestoneProgressEvent,
+  CreateMilestonePayload,
+  UpdateMilestonePayload,
+  PaginatedResponse,
+  MilestoneMonthlyTarget,
+  MonthlyChartRow,
+} from '../types'
 
 export const milestonesService = {
   list: (task_id: number) =>
@@ -35,4 +43,32 @@ export const milestonesService = {
 
   updateProgress: (progressId: number, payload: { increment_value?: number; notes?: string }) =>
     api.put<{ progress: any; new_achieved: number }>(`/private/milestones/progress/${progressId}`, payload).then(r => r.data),
+
+  // ── Metas mensais (monthly targets) ────────────────────────────────────────
+  listMonthlyTargets: (milestoneId: number) =>
+    api.get<{ rows: MilestoneMonthlyTarget[]; total: number }>(
+      `/private/milestones/${milestoneId}/monthly-targets`
+    ).then(r => r.data),
+
+  upsertMonthlyTarget: (
+    milestoneId: number,
+    payload: { period: string; planned_value?: number; achieved_value?: number; notes?: string }
+  ) =>
+    api.put<MilestoneMonthlyTarget>(
+      `/private/milestones/${milestoneId}/monthly-targets`, payload
+    ).then(r => r.data),
+
+  bulkUpsertMonthlyTargets: (
+    milestoneId: number,
+    rows: { period: string; planned_value?: number; achieved_value?: number; notes?: string }[]
+  ) =>
+    api.put<{ rows: MilestoneMonthlyTarget[]; total: number }>(
+      `/private/milestones/${milestoneId}/monthly-targets/bulk`, { rows }
+    ).then(r => r.data),
+
+  taskMonthlyChart: (taskId: number) =>
+    api.get<{ rows: MonthlyChartRow[] }>(`/private/tasks/${taskId}/monthly-chart`).then(r => r.data),
+
+  projectMonthlyChart: (projectId: number) =>
+    api.get<{ rows: MonthlyChartRow[] }>(`/private/projects/${projectId}/monthly-chart`).then(r => r.data),
 }

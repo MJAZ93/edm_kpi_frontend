@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { usersService } from '../../services/org.service'
+import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../stores/auth.store'
 import PageHeader from '../../components/layout/PageHeader'
 import Card from '../../components/ui/Card'
@@ -11,7 +12,6 @@ import Button from '../../components/ui/Button'
 import Avatar from '../../components/ui/Avatar'
 import Badge from '../../components/ui/Badge'
 import Spinner from '../../components/ui/Spinner'
-import api from '../../services/api'
 
 const ROLE_BADGE: Record<string, 'orange' | 'default' | 'muted' | 'warning'> = {
   CA: 'orange',
@@ -57,7 +57,7 @@ export default function ProfilePage() {
     mutationFn: () => {
       if (newPwd !== confirmPwd) throw new Error('Passwords não coincidem.')
       if (newPwd.length < 8) throw new Error('Password demasiado curta.')
-      return api.put('/private/auth/change-password', { current_password: currentPwd, new_password: newPwd })
+      return authService.changePassword(currentPwd, newPwd)
     },
     onSuccess: () => {
       toast.success('Password alterada com sucesso.')
@@ -65,7 +65,10 @@ export default function ProfilePage() {
       setNewPwd('')
       setConfirmPwd('')
     },
-    onError: (err: any) => toast.error(err.message ?? 'Erro ao alterar password.'),
+    onError: (err: any) => {
+      const code = err?.response?.data?.error
+      toast.error(code === 'wrong_password' ? 'Password actual incorrecta.' : (err.message ?? 'Erro ao alterar password.'))
+    },
   })
 
   if (isLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size="lg" /></div>

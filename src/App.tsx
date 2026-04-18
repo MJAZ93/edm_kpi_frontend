@@ -13,6 +13,7 @@ import AppShell from './components/layout/AppShell'
 import LoginPage from './pages/auth/LoginPage'
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
 import ResetPasswordPage from './pages/auth/ResetPasswordPage'
+import ChangePasswordPage from './pages/auth/ChangePasswordPage'
 
 // Dashboard — eagerly loaded (landing page)
 import DashboardPage from './pages/dashboard/DashboardPage'
@@ -89,6 +90,9 @@ export default function App() {
 
           {/* Protected */}
           <Route element={<ProtectedRoute />}>
+            {/* Standalone — no AppShell (shown during forced password change) */}
+            <Route path="/change-password" element={<ChangePasswordPage />} />
+
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<DashboardPage />} />
 

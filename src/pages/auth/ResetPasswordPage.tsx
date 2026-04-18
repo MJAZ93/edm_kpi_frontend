@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { Zap, Lock, Eye, EyeOff } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -8,7 +8,8 @@ import Input from '../../components/ui/Input'
 import { authService } from '../../services/auth.service'
 
 export default function ResetPasswordPage() {
-  const { token } = useParams<{ token: string }>()
+  const [searchParams] = useSearchParams()
+  const token = searchParams.get('token') ?? ''
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -16,7 +17,7 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState('')
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => authService.resetPassword(token!, password),
+    mutationFn: () => authService.resetPassword(token, password),
     onSuccess: () => {
       toast.success('Password alterada com sucesso.')
       navigate('/login')

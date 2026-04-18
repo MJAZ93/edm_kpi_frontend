@@ -7,6 +7,7 @@ interface AuthStore {
   user: User | null
   setAuth: (token: string, user: User) => void
   clearAuth: () => void
+  clearForcePasswordChange: () => void
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -16,6 +17,10 @@ export const useAuthStore = create<AuthStore>()(
       user: null,
       setAuth: (token, user) => set({ token, user }),
       clearAuth: () => set({ token: null, user: null }),
+      clearForcePasswordChange: () =>
+        set(state => ({
+          user: state.user ? { ...state.user, force_password_change: false } : null,
+        })),
     }),
     { name: 'commv_auth' }
   )

@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { History, Paperclip, User, Pencil, Check, X, MessageSquare, Target, MapPin, Calendar, TrendingUp, Clock } from 'lucide-react'
+import { History, Paperclip, User, Pencil, Check, X, MessageSquare, Target, MapPin, Calendar, TrendingUp, Clock, BarChart2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { milestonesService } from '../../services/milestones.service'
 import { periodLabel } from './ProgressModal'
 import EntityFeedbackTab from './EntityFeedbackTab'
+import MonthlyTargetsEditor from './MonthlyTargetsEditor'
 import type { Milestone, MilestoneProgressEvent } from '../../types'
 import Modal from '../ui/Modal'
 import Card from '../ui/Card'
@@ -79,6 +80,8 @@ interface MilestoneDetailModalProps {
   isReduction?: boolean
   taskStartDate?: string
   taskEndDate?: string
+  /** Aggregation type of the parent task — AVG/MANUAL disables sum validation in the monthly editor. */
+  taskAggType?: string
 }
 
 export default function MilestoneDetailModal({
@@ -93,12 +96,13 @@ export default function MilestoneDetailModal({
   isReduction,
   taskStartDate,
   taskEndDate,
+  taskAggType,
 }: MilestoneDetailModalProps) {
   const qc = useQueryClient()
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
   const [editNotes, setEditNotes] = useState('')
-  const [msTab, setMsTab] = useState<'details' | 'feedback'>('details')
+  const [msTab, setMsTab] = useState<'details' | 'history' | 'feedback'>('details')
 
   const updateProgress = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: { increment_value?: number; notes?: string } }) =>
@@ -292,6 +296,7 @@ export default function MilestoneDetailModal({
           <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--color-border)' }}>
             {([
               { key: 'details' as const, label: 'Detalhes', icon: <History size={13} /> },
+              { key: 'history' as const, label: 'Histórico', icon: <TrendingUp size={13} /> },
               { key: 'feedback' as const, label: 'Feedback', icon: <MessageSquare size={13} /> },
             ]).map(t => (
               <button
@@ -311,8 +316,113 @@ export default function MilestoneDetailModal({
             ))}
           </div>
 
+          {/* ── FEEDBACK tab ── */}
           {msTab === 'feedback' && milestoneId ? (
             <EntityFeedbackTab targetType="MILESTONE" targetId={milestoneId} />
+
+          /* ── HISTÓRICO tab ── */
+          ) : msTab === 'history' ? (
+            <Card variant="bordered" padding={18}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <History size={15} style={{ color: 'var(--color-primary)' }} />
+                <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)' }}>Histórico de actualizações</p>
+                <Badge variant="default">{milestoneHistory.length}</Badge>
+              </div>
+
+              {milestoneHistory.length > 1 && (
+                <div style={{ marginBottom: 16 }}>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart
+                      data={[...milestoneHistory]
+                        .sort((a, b) => {
+                          const ka = a.period_reference || a.created_at || ''
+                          const kb = b.period_reference || b.created_at || ''
+                          return ka.localeCompare(kb)
+                        })
+                        .map(e => ({
+                          date: e.period_reference ? periodLabel(e.period_reference) : fmtDate(e.created_at),
+                          value: e.increment_value ?? 0,
+                        }))}
+                      margin={{ top: 4, right: 12, left: 0, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,80,20,0.08)" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} />
+                      <Tooltip content={<ProgressChartTooltip />} cursor={{ fill: 'rgba(232,103,10,0.06)' }} />
+                      <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={24} fill="#e8670a" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {milestoneHistory.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Este indicador ainda não tem actualizações registadas.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto' }}>
+                  {milestoneHistory.map((event: MilestoneProgressEvent) => (
+                    <div key={event.id} style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--color-surface-muted)', border: '1px solid var(--color-border)' }}>
+                      {editingId === event.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' }}>Valor:</label>
+                            <input type="number" step="any" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus
+                              style={{ flex: 1, padding: '6px 10px', fontSize: 14, fontWeight: 700, border: '2px solid var(--color-primary)', borderRadius: 8, background: 'var(--color-surface-strong)', color: 'var(--color-text)', outline: 'none' }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' }}>Notas:</label>
+                            <input type="text" value={editNotes} onChange={e => setEditNotes(e.target.value)}
+                              style={{ flex: 1, padding: '6px 10px', fontSize: 13, border: '1.5px solid var(--color-border-strong)', borderRadius: 8, background: 'var(--color-surface-strong)', color: 'var(--color-text)', outline: 'none' }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            <button onClick={() => setEditingId(null)} style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <X size={12} /> Cancelar
+                            </button>
+                            <button
+                              onClick={() => updateProgress.mutate({ id: event.id, payload: { increment_value: parseFloat(editValue) || 0, notes: editNotes } })}
+                              style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'var(--color-primary)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}
+                            >
+                              <Check size={12} /> Guardar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
+                            <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)' }}>
+                              +{(event.increment_value ?? 0).toLocaleString('pt-PT')}{goalLabel ? ` ${goalLabel}` : ''}
+                            </p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 700 }}>
+                                {event.period_reference ? periodLabel(event.period_reference) : fmtDate(event.created_at)}
+                              </span>
+                              <button
+                                onClick={() => { setEditingId(event.id); setEditValue(String(event.increment_value ?? 0)); setEditNotes(event.notes ?? '') }}
+                                style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600 }}
+                                title="Editar valor"
+                              >
+                                <Pencil size={10} /> Editar
+                              </button>
+                            </div>
+                          </div>
+                          <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: event.notes ? 4 : 0 }}>
+                            {event.user?.name ?? 'Utilizador'} registou esta actualização{event.created_at ? ` em ${fmtDateTime(event.created_at)}` : ''}
+                          </p>
+                          {event.notes && (
+                            <p style={{ fontSize: 12, color: 'var(--color-text)', lineHeight: 1.5 }}>
+                              {event.notes}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+          /* ── DETALHES tab ── */
           ) : (
           <>
           {/* ── Visual Progress + Projection ── */}
@@ -440,106 +550,22 @@ export default function MilestoneDetailModal({
             </Card>
           )}
 
-          {/* ── Histórico de actualizações ── */}
-          <Card variant="bordered" padding={18}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <History size={15} style={{ color: 'var(--color-primary)' }} />
-              <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)' }}>Histórico de actualizações</p>
-              <Badge variant="default">{milestoneHistory.length}</Badge>
-            </div>
-
-            {milestoneHistory.length > 1 && (
-              <div style={{ marginBottom: 16 }}>
-                <ResponsiveContainer width="100%" height={140}>
-                  <BarChart
-                    data={[...milestoneHistory]
-                      .sort((a, b) => {
-                        const ka = a.period_reference || a.created_at || ''
-                        const kb = b.period_reference || b.created_at || ''
-                        return ka.localeCompare(kb)
-                      })
-                      .map(e => ({
-                        date: e.period_reference ? periodLabel(e.period_reference) : fmtDate(e.created_at),
-                        value: e.increment_value ?? 0,
-                      }))}
-                    margin={{ top: 4, right: 12, left: 0, bottom: 4 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,80,20,0.08)" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<ProgressChartTooltip />} cursor={{ fill: 'rgba(232,103,10,0.06)' }} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={24} fill="#e8670a" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {milestoneHistory.length === 0 ? (
-              <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Este indicador ainda não tem actualizações registadas.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {milestoneHistory.map((event: MilestoneProgressEvent) => (
-                  <div key={event.id} style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--color-surface-muted)', border: '1px solid var(--color-border)' }}>
-                    {editingId === event.id ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' }}>Valor:</label>
-                          <input type="number" step="any" value={editValue} onChange={e => setEditValue(e.target.value)} autoFocus
-                            style={{ flex: 1, padding: '6px 10px', fontSize: 14, fontWeight: 700, border: '2px solid var(--color-primary)', borderRadius: 8, background: 'var(--color-surface-strong)', color: 'var(--color-text)', outline: 'none' }}
-                          />
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' }}>Notas:</label>
-                          <input type="text" value={editNotes} onChange={e => setEditNotes(e.target.value)}
-                            style={{ flex: 1, padding: '6px 10px', fontSize: 13, border: '1.5px solid var(--color-border-strong)', borderRadius: 8, background: 'var(--color-surface-strong)', color: 'var(--color-text)', outline: 'none' }}
-                          />
-                        </div>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <button onClick={() => setEditingId(null)} style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <X size={12} /> Cancelar
-                          </button>
-                          <button
-                            onClick={() => updateProgress.mutate({ id: event.id, payload: { increment_value: parseFloat(editValue) || 0, notes: editNotes } })}
-                            style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'var(--color-primary)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}
-                          >
-                            <Check size={12} /> Guardar
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-                          <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-text)' }}>
-                            +{(event.increment_value ?? 0).toLocaleString('pt-PT')}{goalLabel ? ` ${goalLabel}` : ''}
-                          </p>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 700 }}>
-                              {event.period_reference ? periodLabel(event.period_reference) : fmtDate(event.created_at)}
-                            </span>
-                            <button
-                              onClick={() => { setEditingId(event.id); setEditValue(String(event.increment_value ?? 0)); setEditNotes(event.notes ?? '') }}
-                              style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600 }}
-                              title="Editar valor"
-                            >
-                              <Pencil size={10} /> Editar
-                            </button>
-                          </div>
-                        </div>
-                        <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600, marginBottom: event.notes ? 4 : 0 }}>
-                          {event.user?.name ?? 'Utilizador'} registou esta actualização{event.created_at ? ` em ${fmtDateTime(event.created_at)}` : ''}
-                        </p>
-                        {event.notes && (
-                          <p style={{ fontSize: 12, color: 'var(--color-text)', lineHeight: 1.5 }}>
-                            {event.notes}
-                          </p>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
+          {/* ── Meta vs Realizado chart + expandable editor ── */}
+          {milestoneId && (
+            <MonthlyTargetsEditor
+              milestoneId={milestoneId}
+              unit={goalLabel}
+              plannedGlobal={selectedMilestone?.planned_value ?? 0}
+              collapsibleTable
+              aggregationType={taskAggType}
+              isReduction={isReduction}
+              invalidateKeys={[
+                ['task-monthly-chart'],
+                ['project-monthly-chart'],
+                ['projects', 'execution-history'],
+              ]}
+            />
+          )}
           </>
           )}
         </div>

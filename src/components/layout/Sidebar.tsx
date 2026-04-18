@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   LayoutDashboard, FolderKanban, BarChart3, Map, Trophy, GitCompare,
   Building2, Globe, Users, ShieldAlert, Bell, ClipboardList, MessageSquare,
-  ChevronDown, ChevronRight, LogOut,
+  ChevronDown, ChevronRight, LogOut, Lock,
 } from 'lucide-react'
 import Avatar from '../ui/Avatar'
 import { useAuthStore } from '../../stores/auth.store'
@@ -69,6 +69,7 @@ export default function Sidebar({ activeKey = '' }: SidebarProps) {
   const notificationCount = useUIStore(s => s.notificationCount)
   const feedbackCount = useUIStore(s => s.feedbackCount)
   const { can } = useAuth()
+  const queryClient = useQueryClient()
 
   const { data: backendVersion } = useQuery({
     queryKey: ['backend-version'],
@@ -205,7 +206,15 @@ export default function Sidebar({ activeKey = '' }: SidebarProps) {
           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name ?? '—'}</div>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.40)', fontWeight: 600 }}>{user?.role ?? ''}</div>
         </div>
-        <button onClick={() => { clearAuth(); navigate('/login') }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.40)', cursor: 'pointer', display: 'flex', padding: 4, borderRadius: 6 }}
+        <button onClick={() => navigate('/change-password')} title="Alterar password"
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.40)', cursor: 'pointer', display: 'flex', padding: 4, borderRadius: 6 }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.40)')}
+        >
+          <Lock size={16} />
+        </button>
+        <button onClick={() => { queryClient.clear(); clearAuth(); navigate('/login') }} title="Terminar sessão"
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.40)', cursor: 'pointer', display: 'flex', padding: 4, borderRadius: 6 }}
           onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
           onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.40)')}
         >
